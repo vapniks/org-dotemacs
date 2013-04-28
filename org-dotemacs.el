@@ -120,8 +120,10 @@
 ;; Upload to elpa/melpa/marmalade
 ;;
 ;; Would be great to evaluate the code blocks directly instead of saving to a file first.
-;; The blocks could be wrapped in condition-case statements so that blocks with errors are skipped over.
+;; The blocks could be wrapped in condition-case statements so that blocks with errors are skipped over,
+;; or loaded at a later time with an error report at the end.
 ;; Could also introduce dependency properties and load blocks in order according to these dependencies.
+;; 
 
 ;;; Require
 (eval-when-compile (require 'cl))
