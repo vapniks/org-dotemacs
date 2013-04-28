@@ -39,24 +39,58 @@
 
 ;;; Commentary: 
 ;; 
-;; Store your emacs config as an org file, and load code blocks based on tag matches.
-;; Create an org file containing emacs-lisp code blocks (see the org manual "Working with source code" page).
-;; You can then put the following code in your emacs init file (e.g. ~/.emacs) to load the code in your
-;; org file on startup:
-
-;; (org-dotemacs-load-file "~/.emacs.d/dotemacs.org")
+;; Keeping your emacs config in an org file makes it easier for you to keep your .emacs under control,
+;; and avoid dotemacs bankruptcy (http://www.emacswiki.org/emacs/DotEmacsBankruptcy).
+;; With your config code stored in an org file you can easily edit the structure and keep notes.
+;; This library allows you to load elisp code from an org file on emacs startup.
+;; You can also limit the code that is loaded to certain tagged headers using an org tag match
+;; (see "Matching tags and properties" in the org manual).
+;;
 
 ;;; Installation:
 ;;
+;; First you need to create an org file ~/.dotemacs.org and add your config code to emacs-lisp code blocks in the file,
+;; e.g. like this:
+;;
+;; * Display settings code
+;; #+NAME: display_settings
+;; #+BEGIN_SRC emacs-lisp
+;; (setq line-number-mode t)
+;; (setq column-number-mode t)
+;; (setq frame-title-format "%b")
+;; (set-background-color "Black")
+;; (set-foreground-color "White")
+;; (set-cursor-color "White")
+;; #+END_SRC
+;; * Scrolling settings code
+;; #+NAME: scroll_settings
+;; #+BEGIN_SRC emacs-lisp
+;; (mouse-wheel-mode t)
+;; (setq scroll-step 1)
+;; (setq scroll-conservatively 5)
+;; #+END_SRC
+
 ;; Put org-dotemacs.el in a directory in your load-path, e.g. ~/.emacs.d/
 ;; You can add a directory to your load-path with the following line in ~/.emacs
 ;; (add-to-list 'load-path (expand-file-name "~/elisp"))
 ;; where ~/elisp is the directory you want to add 
 ;; (you don't need to do this for ~/.emacs.d - it's added by default).
 ;;
-;; Add the following to your ~/.emacs startup file.
+;; Then add the following lines to the end of your .emacs file
+;; (load-file "~/.emacs.d/org-dotemacs.el")
+;; (org-dotemacs-load-file)
+
+;; If you stored your org file somewhere else you can specify the location as the first argument to
+;; the `org-dotemacs-load-file' function, e.g:
 ;;
-;; (require 'org-dotemacs)
+;; (org-dotemacs-load-file "~/.emacs.d/my_emacs_config.org")
+;;
+;; You can also specify a tag match in the second argument to limit which code blocks are loaded, e.g:
+;;
+;; (org-dotemacs-load-file "~/.emacs.d/my_emacs_config.org" "linux|basic-windows")
+;;
+;; See the org manual "Matching tags and properties" section for more details on tag matches.
+;;
 
 ;;; Customize:
 ;;
@@ -83,10 +117,15 @@
 ;;
 ;; Error checking on file name: make sure we don't overwrite ~/.emacs ~/.emacs.el or ~/.emacs.d/init.el
 ;; Documentation.
+;; Upload to elpa/melpa/marmalade
+;;
+;; Would be great to evaluate the code blocks directly instead of saving to a file first.
+;; The blocks could be wrapped in condition-case statements so that blocks with errors are skipped over.
+;; Could also introduce dependency properties and load blocks in order according to these dependencies.
 
 ;;; Require
+(eval-when-compile (require 'cl))
 (require 'org)
-(require 'ob-core)
 
 ;;; Code:
 
@@ -134,11 +173,11 @@ MATCH should be a tag match as detailed in the org manual."
       (kill-buffer buf))))
 
 ;;;###autoload
-(defun* org-dotemacs-load-file (&optional (file "~/.emacsorg.org") match savefile)
+(defun* org-dotemacs-load-file (&optional (file "~/.dotemacs.org") (match "") savefile)
   "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
 The elisp code will be saved to a file with the same name as FILE but with a \".el\" extension,
 unless SAVEFILE is supplied in which case it will be saved there instead."
-  (interactive "File to load: \nP")
+  (interactive (list (read-file-name "File to load: " user-emacs-directory) nil))
   (require 'ob-core)
   (let* ((age (lambda (file)
 		(float-time
@@ -147,7 +186,7 @@ unless SAVEFILE is supplied in which case it will be saved there instead."
 					   (file-attributes file)))))))
 	 (base-name (file-name-sans-extension (or savefile file)))
 	 (target-file (concat base-name ".el")))
-    (unless (and (file-exists-p exported-file)
+    (unless (and (file-exists-p target-file)
 		 (> (funcall age file) (funcall age target-file)))
       (let ((visited-p (get-file-buffer (expand-file-name file)))
             to-be-removed)
