@@ -160,21 +160,6 @@ the copied subtrees will be visited."
       buf)))
 
 ;;;###autoload
-(defun org-dotemacs-extract-code (match target-file)
-  "Extract code in subtrees in current org-mode buffer that match tag MATCH, and save them to TARGET-FILE.
-This function should be called within an org-mode buffer.
-MATCH should be a tag match as detailed in the org manual."
-  (interactive (list nil (read-file-name "File to save code to: " user-emacs-directory)))
-  (let ((buf (org-dotemacs-extract-subtrees match)))
-    (with-current-buffer buf
-      (let ((tempfile (concat temporary-file-directory (buffer-name))))
-        ;; for some reason org requires the buffer to be saved first
-        (write-file tempfile)
-        (org-babel-tangle nil target-file 'emacs-lisp)
-        (delete-file tempfile))
-      (kill-buffer buf))))
-
-;;;###autoload
 (defun* org-dotemacs-load-file (&optional (file "~/.dotemacs.org") (match "") target-file)
   "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
 If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
