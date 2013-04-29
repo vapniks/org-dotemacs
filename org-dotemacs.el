@@ -117,7 +117,7 @@
 ;;
 ;; Error checking on file name: make sure we don't overwrite ~/.emacs ~/.emacs.el or ~/.emacs.d/init.el
 ;; Documentation.
-;; Upload to elpa/melpa/marmalade
+;; Upload to elpa/melpa/marmalade and emacswiki
 ;;
 ;; Would be great to evaluate the code blocks directly instead of saving to a file first.
 ;; The blocks could be wrapped in condition-case statements so that blocks with errors are skipped over,
@@ -200,6 +200,76 @@ unless SAVEFILE is supplied in which case it will be saved there instead."
           (kill-buffer to-be-removed))))
     (load-file target-file)))
 
+;; Based on `org-babel-tangle'
+;;;###autoload
+(defun org-dotemacs-load-blocks (&optional target-file) ;
+  "Load the emacs-lisp code blocks in the current org-mode file.
+Save the blocks to TARGET-FILE if it is non-nil."
+  (run-hooks 'org-babel-pre-tangle-hook)
+  (save-restriction
+    (save-excursion
+      (let* ((block-counter 1)
+             (org-babel-default-header-args
+              (org-babel-merge-params org-babel-default-header-args
+                                      (list (cons :tangle (or target-file "yes")))))
+             (specs (cdar (org-babel-tangle-collect-blocks 'emacs-lisp)))
+             evaluated-blocks unevaluated-blocks fail)
+        ;; delete any old versions of file
+        (if (and target-file (file-exists-p target-file))
+            (delete-file target-file))
+        (flet ((get-spec (name) (cdr (assoc name (nth 4 spec)))))
+          (mapc
+           (lambda (spec)
+             (let ((blockname (or (get-spec :name)
+                                  (concat "block_" (number-to-string block-counter))))
+                   (blockdependencies (get-spec :depends)))
+               (with-temp-buffer
+                 (ignore-errors (emacs-lisp-mode))
+                 (org-babel-spec-to-string spec)
+                 ;; evaluate the code
+                 (message "Evaluating %s code block" blockname)
+                 (setq fail nil)
+                 (condition-case err
+                     (eval-buffer)
+                   (error
+                    (setq fail t)
+                    (message "Error in %s code block: %s"
+                             blockname (error-message-string err))
+                    (setq unevaluated-blocks (append unevaluated-blocks (list blockname)))))
+                 (unless fail
+                   (setq evaluated-blocks (append evaluated-blocks (list blockname)))
+                   ;; We avoid append-to-file as it does not work with tramp.
+                   (when target-file
+                     ;; drop source-block to file
+                     (let ((content (buffer-string)))
+                       (with-temp-buffer
+                         (if (file-exists-p target-file)
+                             (insert-file-contents target-file))
+                         (goto-char (point-max))
+                         (insert content)
+                         (write-region nil nil target-file)))))
+                 ;; update counter
+                 (setq block-counter (+ 1 block-counter)))))
+           specs))
+        (message "Tangled %d code block%s from %s" (- block-counter 1)
+                 (if (<= block-counter 2) "" "s")
+                 (file-name-nondirectory
+                  (buffer-file-name (or (buffer-base-buffer) (current-buffer)))))
+        (if (not unevaluated-blocks)
+            (message "\nAll blocks evaluated successfully!")
+          (message "\nSuccessfully evaluated the following %d code blocks: %s"
+                   (length evaluated-blocks)
+                   (mapconcat 'identity evaluated-blocks " "))
+          (message "\nThe following %d code block%s had errors: %s\n"
+                   (length unevaluated-blocks)
+                   (if (= 1 (length unevaluated-blocks)) "" "s")
+                   (mapconcat 'identity unevaluated-blocks " "))))
+      ;; run `org-babel-post-tangle-hook' in tangled file
+      (when (and org-babel-post-tangle-hook
+                 target-file
+                 (file-exists-p target-file))
+        (org-babel-with-temp-filebuffer target-file
+          (run-hooks 'org-babel-post-tangle-hook))))))
 
 (provide 'org-dotemacs)
 
