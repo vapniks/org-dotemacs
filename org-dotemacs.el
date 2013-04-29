@@ -175,30 +175,41 @@ MATCH should be a tag match as detailed in the org manual."
       (kill-buffer buf))))
 
 ;;;###autoload
-(defun* org-dotemacs-load-file (&optional (file "~/.dotemacs.org") (match "") savefile)
+(defun* org-dotemacs-load-file (&optional (file "~/.dotemacs.org") (match "") target-file)
   "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
-The elisp code will be saved to a file with the same name as FILE but with a \".el\" extension,
-unless SAVEFILE is supplied in which case it will be saved there instead."
-  (interactive (list (read-file-name "File to load: " user-emacs-directory) nil))
+If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
+not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
+ (the function will halt with an error in those cases)."
+  (interactive (list (read-file-name "File to load: " user-emacs-directory nil t nil
+                                     (lambda (file)
+                                       (string-match "\\.org$" file)))
+                     nil
+                     (read-file-name "Save to file: " user-emacs-directory)))
+  (if (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file)
+      (error "Refuse to overwrite %s" target-file))
   (require 'ob-core)
-  (let* ((age (lambda (file)
-		(float-time
-		 (time-subtract (current-time)
-				(nth 5 (or (file-attributes (file-truename file))
-					   (file-attributes file)))))))
-	 (base-name (file-name-sans-extension (or savefile file)))
-	 (target-file (concat base-name ".el")))
-    (unless (and (file-exists-p target-file)
-		 (> (funcall age file) (funcall age target-file)))
+  (flet ((age (file) (float-time
+                      (time-subtract (current-time)
+                                     (nth 5 (or (file-attributes (file-truename file))
+                                                (file-attributes file)))))))
+    (if (and target-file
+             (file-exists-p target-file)
+             (> (age file) (age target-file)))
+        (load-file target-file)
       (let ((visited-p (get-file-buffer (expand-file-name file)))
-            to-be-removed)
+            matchbuf to-be-removed)
         (save-window-excursion
           (find-file file)
           (setq to-be-removed (current-buffer))
-          (org-dotemacs-extract-code match target-file))
+          (setq matchbuf (org-dotemacs-extract-subtrees match))
+          (with-current-buffer matchbuf
+            ;; Write the buffer out first to prevent org-babel-pre-tangle-hook
+            ;; prompting for a filename to save it in.
+            (write-file (concat temporary-file-directory (buffer-name)))
+            (org-dotemacs-load-blocks target-file))
+          (kill-buffer matchbuf))
         (unless visited-p
-          (kill-buffer to-be-removed))))
-    (load-file target-file)))
+          (kill-buffer to-be-removed))))))
 
 ;; Based on `org-babel-tangle'
 ;;;###autoload
@@ -240,7 +251,7 @@ Save the blocks to TARGET-FILE if it is non-nil."
                    (setq evaluated-blocks (append evaluated-blocks (list blockname)))
                    ;; We avoid append-to-file as it does not work with tramp.
                    (when target-file
-                     ;; drop source-block to file
+                     ;; save source-block to file
                      (let ((content (buffer-string)))
                        (with-temp-buffer
                          (if (file-exists-p target-file)
