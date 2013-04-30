@@ -53,7 +53,6 @@
 ;; e.g. like this:
 ;;
 ;; * Display settings code
-;; #+NAME: display_settings
 ;; #+BEGIN_SRC emacs-lisp
 ;; (setq line-number-mode t)
 ;; (setq column-number-mode t)
@@ -131,6 +130,37 @@
 
 ;;; Code:
 
+;; This function was obtained from string-fns.el by Noah Friedman <friedman@splode.com>
+;;;###autoload
+(defun string-split (string &optional separator limit)
+  "Split STRING at occurences of SEPARATOR.  Return a list of substrings.
+Optional argument SEPARATOR can be any regexp, but anything matching the
+ separator will never appear in any of the returned substrings.
+ If not specified, SEPARATOR defaults to \"[ \\f\\t\\n\\r\\v]+\".
+If optional arg LIMIT is specified, split into no more than that many
+ fields \(though it may split into fewer\)."
+  (or separator (setq separator "[ \f\t\n\r\v]+"))
+  (let ((string-list nil)
+        (len (length string))
+        (pos 0)
+        (splits 0)
+        str)
+    (save-match-data
+      (while (<= pos len)
+        (setq splits (1+ splits))
+        (cond ((and limit
+                    (>= splits limit))
+               (setq str (substring string pos))
+               (setq pos (1+ len)))
+              ((string-match separator string pos)
+               (setq str (substring string pos (match-beginning 0)))
+               (setq pos (match-end 0)))
+              (t
+               (setq str (substring string pos))
+               (setq pos (1+ len))))
+        (setq string-list (cons str string-list))))
+    (nreverse string-list)))
+
 ;;;###autoload
 (defun org-dotemacs-extract-subtrees (match)
   "Extract subtrees in current org-mode buffer that match tag MATCH.
@@ -173,7 +203,7 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
   (if (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file)
       (error "Refuse to overwrite %s" target-file))
   (require 'ob-core)
-  (flet ((age (file) (float-time
+  (cl-flet ((age (file) (float-time
                       (time-subtract (current-time)
                                      (nth 5 (or (file-attributes (file-truename file))
                                                 (file-attributes file)))))))
@@ -196,11 +226,12 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
         (unless visited-p
           (kill-buffer to-be-removed))))))
 
-;; Based on `org-babel-tangle'
 ;;;###autoload
-(defun org-dotemacs-load-blocks (&optional target-file) ;
+(defun org-dotemacs-load-blocks (&optional target-file retry) ;
   "Load the emacs-lisp code blocks in the current org-mode file.
-Save the blocks to TARGET-FILE if it is non-nil."
+Save the blocks to TARGET-FILE if it is non-nil.
+If RETRY is non-nil then blocks that fail to load (either due to errors or unmet dependencies)
+will be retried after each successfully loaded block."
   (run-hooks 'org-babel-pre-tangle-hook)
   (save-restriction
     (save-excursion
@@ -209,57 +240,72 @@ Save the blocks to TARGET-FILE if it is non-nil."
               (org-babel-merge-params org-babel-default-header-args
                                       (list (cons :tangle (or target-file "yes")))))
              (specs (cdar (org-babel-tangle-collect-blocks 'emacs-lisp)))
-             evaluated-blocks unevaluated-blocks fail)
+             (get-spec (lambda (spec name) (cdr (assoc name (nth 4 spec)))))
+             (try-eval (lambda (spec blockname)
+                         (let ((dependencies (funcall get-spec spec :depends))
+                               fail)
+                           (if (cl-subsetp (and dependencies (string-split dependencies))
+                                           evaluated-blocks)
+                               (with-temp-buffer
+                                 (ignore-errors (emacs-lisp-mode))
+                                 (org-babel-spec-to-string spec)
+                                 ;; evaluate the code
+                                 (message "Evaluating %s code block" blockname)
+                                 (setq fail nil)
+                                 (condition-case err
+                                     (eval-buffer)
+                                   (error
+                                    (setq fail 'error)
+                                    (message "Error in %s code block: %s"
+                                             blockname (error-message-string err))))
+                                 (unless fail
+                                   (setq evaluated-blocks (append evaluated-blocks (list blockname)))
+                                   ;; We avoid append-to-file as it does not work with tramp.
+                                   (when target-file
+                                     ;; save source-block to file
+                                     (let ((content (buffer-string)))
+                                       (with-temp-buffer
+                                         (if (file-exists-p target-file)
+                                             (insert-file-contents target-file))
+                                         (goto-char (point-max))
+                                         (insert content)
+                                         (write-region nil nil target-file)))))
+                                 fail) 'unmet))))
+             evaluated-blocks unevaluated-blocks unmet-dependencies)
         ;; delete any old versions of file
         (if (and target-file (file-exists-p target-file))
             (delete-file target-file))
-        (flet ((get-spec (name) (cdr (assoc name (nth 4 spec)))))
-          (mapc
-           (lambda (spec)
-             (let ((blockname (or (get-spec :name)
-                                  (concat "block_" (number-to-string block-counter))))
-                   (blockdependencies (get-spec :depends)))
-               (with-temp-buffer
-                 (ignore-errors (emacs-lisp-mode))
-                 (org-babel-spec-to-string spec)
-                 ;; evaluate the code
-                 (message "Evaluating %s code block" blockname)
-                 (setq fail nil)
-                 (condition-case err
-                     (eval-buffer)
-                   (error
-                    (setq fail t)
-                    (message "Error in %s code block: %s"
-                             blockname (error-message-string err))
-                    (setq unevaluated-blocks (append unevaluated-blocks (list blockname)))))
-                 (unless fail
-                   (setq evaluated-blocks (append evaluated-blocks (list blockname)))
-                   ;; We avoid append-to-file as it does not work with tramp.
-                   (when target-file
-                     ;; save source-block to file
-                     (let ((content (buffer-string)))
-                       (with-temp-buffer
-                         (if (file-exists-p target-file)
-                             (insert-file-contents target-file))
-                         (goto-char (point-max))
-                         (insert content)
-                         (write-region nil nil target-file)))))
-                 ;; update counter
-                 (setq block-counter (+ 1 block-counter)))))
-           specs))
-        (message "Tangled %d code block%s from %s" (- block-counter 1)
-                 (if (<= block-counter 2) "" "s")
-                 (file-name-nondirectory
-                  (buffer-file-name (or (buffer-base-buffer) (current-buffer)))))
+        (mapc
+         (lambda (spec)
+           (let ((blockname (or (funcall get-spec spec :name)
+                                (concat "block_" (number-to-string block-counter)))))
+             (let ((fail (funcall try-eval spec blockname)))
+               (case fail
+                 (error
+                  (setq unevaluated-blocks (append unevaluated-blocks (list (cons blockname spec)))))
+                 (unmet
+                  (setq unmet-dependencies (append unmet-dependencies (list (cons blockname spec)))))
+                 (nil (if retry (while (not fail)
+                                  (loop for blk in (append unevaluated-blocks unmet-dependencies)
+                                        do (setq fail (funcall try-eval (car blk) (cdr blk)))
+                                        unless fail do (setq unevaluated-blocks (remove blk unevaluated-blocks))
+                                        (setq unmet-dependencies (remove blk unmet-dependencies))
+                                        and return t))))))
+             (setq block-counter (+ 1 block-counter))))
+         specs)
         (if (not unevaluated-blocks)
             (message "\nAll blocks evaluated successfully!")
           (message "\nSuccessfully evaluated the following %d code blocks: %s"
                    (length evaluated-blocks)
                    (mapconcat 'identity evaluated-blocks " "))
-          (message "\nThe following %d code block%s had errors: %s\n"
+          (message "\nThe following %d code block%s errors: %s\n"
                    (length unevaluated-blocks)
-                   (if (= 1 (length unevaluated-blocks)) "" "s")
-                   (mapconcat 'identity unevaluated-blocks " "))))
+                   (if (= 1 (length unevaluated-blocks)) " has" "s have")
+                   (mapconcat 'car unevaluated-blocks " "))
+          (message "\nThe following %d code block%s unmet dependencies: %s\n"
+                   (length unmet-dependencies)
+                   (if (= 1 (length unmet-dependencies)) " has" "s have")
+                   (mapconcat 'car unmet-dependencies " "))))
       ;; run `org-babel-post-tangle-hook' in tangled file
       (when (and org-babel-post-tangle-hook
                  target-file
