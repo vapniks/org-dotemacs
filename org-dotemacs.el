@@ -114,14 +114,8 @@
 
 ;;; TODO
 ;;
-;; Error checking on file name: make sure we don't overwrite ~/.emacs ~/.emacs.el or ~/.emacs.d/init.el
-;; Documentation.
 ;; Upload to elpa/melpa/marmalade and emacswiki
 ;;
-;; Would be great to evaluate the code blocks directly instead of saving to a file first.
-;; The blocks could be wrapped in condition-case statements so that blocks with errors are skipped over,
-;; or loaded at a later time with an error report at the end.
-;; Could also introduce dependency properties and load blocks in order according to these dependencies.
 ;; 
 
 ;;; Require
@@ -200,7 +194,7 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
                                        (string-match "\\.org$" file)))
                      nil
                      (read-file-name "Save to file: " user-emacs-directory)))
-  (if (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file)
+  (if (and target-file (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file))
       (error "Refuse to overwrite %s" target-file))
   (require 'ob-core)
   (cl-flet ((age (file) (float-time
