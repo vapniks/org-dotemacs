@@ -230,11 +230,9 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                                       (list (cons :tangle (or target-file "yes")))))
              (specs (cdar (org-babel-tangle-collect-blocks 'emacs-lisp)))
              (get-spec (lambda (spec name) (cdr (assoc name (nth 4 spec)))))
-             (try-eval (lambda (spec blockname)
-                         (let ((dependencies (funcall get-spec spec :depends))
-                               fail)
-                           (if (cl-subsetp (and dependencies (string-split dependencies))
-                                           evaluated-blocks)
+             (try-eval (lambda (spec blockname blockdeps)
+                         (let (fail)
+                           (if (cl-subsetp blockdeps evaluated-blocks :test 'equal)
                                (with-temp-buffer
                                  (ignore-errors (emacs-lisp-mode))
                                  (org-babel-spec-to-string spec)
@@ -268,9 +266,21 @@ argument which uses `org-dotemacs-error-handling' for its default value."
             (delete-file target-file))
         (mapc
          (lambda (spec)
-           (let ((blockname (or (funcall get-spec spec :name)
-                                (concat "block_" (number-to-string block-counter)))))
-             (let ((fail (funcall try-eval spec blockname)))
+           (let* ((linenum (car spec))
+                  (start (save-excursion
+                           (goto-char (point-min))
+                           (forward-line (1- linenum))
+                           (point)))
+                  (subtreedeps (org-entry-get start "DEPENDS" t))
+                  (subtreename (org-entry-get start "NAME" t))
+                  (blockname (or (funcall get-spec spec :name)
+                                 subtreename
+                                 (concat "block_" (number-to-string block-counter))))
+                  (blockdeps (remove "" (string-split (concat (funcall get-spec spec :depends)
+                                                              " "
+                                                              subtreedeps)
+                                                      "[ ,\f\t\n\r\v]+"))))
+             (let ((fail (funcall try-eval spec blockname blockdeps)))
                (case fail
                  (error
                   (setq unevaluated-blocks (append unevaluated-blocks (list (cons blockname spec)))))
