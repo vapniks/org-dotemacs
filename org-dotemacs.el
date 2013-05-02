@@ -295,7 +295,7 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                                   and return t))))))
              (setq block-counter (+ 1 block-counter))))
          specs)
-        (if (not unevaluated-blocks)
+        (if (and (not unevaluated-blocks) (not unmet-dependencies))
             (message "\norg-dotemacs: All blocks evaluated successfully!")
           (message "\norg-dotemacs: Successfully evaluated the following %d code blocks: %s"
                    (length evaluated-blocks)
