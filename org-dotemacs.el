@@ -348,6 +348,13 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
         (unless visited-p
           (kill-buffer to-be-removed))))))
 
+(defun org-dotemacs-load-default (match)
+  "Load code from `org-dotemacs-default-file' matching tag MATCH.
+Unlike `org-dotemacs-load-file' the user is not prompted for the location of any files,
+and no code is saved."
+  (interactive (list nil))
+  (org-dotemacs-load-file))
+
 (provide 'org-dotemacs)
 
 ;;; org-dotemacs.el ends here
