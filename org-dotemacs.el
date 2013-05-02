@@ -353,7 +353,7 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
 Unlike `org-dotemacs-load-file' the user is not prompted for the location of any files,
 and no code is saved."
   (interactive (list nil))
-  (org-dotemacs-load-file))
+  (org-dotemacs-load-file match org-dotemacs-default-file nil))
 
 (provide 'org-dotemacs)
 
