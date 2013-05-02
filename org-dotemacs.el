@@ -204,7 +204,7 @@ the copied subtrees will be visited."
                                    return t)
                        (let ((start (point)) end)
                          (org-copy-subtree)
-                         (setq end (+ start (length (car kill-ring))))
+                         (setq end (+ start (length (current-kill 0 t))))
                          (push (cons start end) copied-areas))
                        (with-current-buffer buf 
                          (goto-char (point-max))
