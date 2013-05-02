@@ -44,7 +44,7 @@
 ;; With your config code stored in an org file you can easily edit the structure and keep notes.
 ;; This library allows you to load elisp code from an org file on emacs startup.
 ;; You can also limit the code that is loaded to certain tagged headers using an org tag match
-;; (see "Matching tags and properties" in the org manual).
+;; (see "Matching tags and properties" in the org manual), and get emacs to try reloading blocks.
 ;;
 
 ;;; Installation:
@@ -123,6 +123,23 @@
 (require 'org)
 
 ;;; Code:
+
+
+
+
+(defvar org-dotemacs-error-handling 'skip
+  "Indicates how errors should be handled by `org-dotemacs-load-blocks'.
+If eq to 'skip then errors will be skipped over (default).
+If eq to 'retry then `org-dotemacs-load-blocks' will attempt to reload any blocks containing errors,
+after each successfully loaded block.
+In all other cases errors will cause evaluation to halt as normal.
+In all cases errors will be reported in the *Messages* buffer as normal.
+
+This variable can be set from the command line using the dotemacs-error-handling argument.")
+
+(defvar org-dotemacs-tag-match nil
+  "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
+If non-nil the value of this variable will override the match argument to `org-dotemacs-load-file'.")
 
 ;; This function was obtained from string-fns.el by Noah Friedman <friedman@splode.com>
 ;;;###autoload
@@ -210,7 +227,7 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
         (save-window-excursion
           (find-file file)
           (setq to-be-removed (current-buffer))
-          (setq matchbuf (org-dotemacs-extract-subtrees match))
+          (setq matchbuf (org-dotemacs-extract-subtrees (or org-dotemacs-tag-match match)))
           (with-current-buffer matchbuf
             ;; Write the buffer out first to prevent org-babel-pre-tangle-hook
             ;; prompting for a filename to save it in.
@@ -221,11 +238,11 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
           (kill-buffer to-be-removed))))))
 
 ;;;###autoload
-(defun org-dotemacs-load-blocks (&optional target-file retry) ;
+(defun org-dotemacs-load-blocks (&optional target-file (errorhandling org-dotemacs-error-handling))
   "Load the emacs-lisp code blocks in the current org-mode file.
 Save the blocks to TARGET-FILE if it is non-nil.
-If RETRY is non-nil then blocks that fail to load (either due to errors or unmet dependencies)
-will be retried after each successfully loaded block."
+See the definition of `org-dotemacs-error-handling' for an explanation of the ERRORHANDLING
+argument which uses `org-dotemacs-error-handling' for its default value."
   (run-hooks 'org-babel-pre-tangle-hook)
   (save-restriction
     (save-excursion
@@ -246,12 +263,14 @@ will be retried after each successfully loaded block."
                                  ;; evaluate the code
                                  (message "Evaluating %s code block" blockname)
                                  (setq fail nil)
-                                 (condition-case err
-                                     (eval-buffer)
-                                   (error
-                                    (setq fail 'error)
-                                    (message "Error in %s code block: %s"
-                                             blockname (error-message-string err))))
+                                 (if (member errorhandling '(skip retry))
+                                     (condition-case err
+                                         (eval-buffer)
+                                       (error
+                                        (setq fail 'error)
+                                        (message "Error in %s code block: %s"
+                                                 blockname (error-message-string err))))
+                                   (eval-buffer))
                                  (unless fail
                                    (setq evaluated-blocks (append evaluated-blocks (list blockname)))
                                    ;; We avoid append-to-file as it does not work with tramp.
@@ -279,12 +298,13 @@ will be retried after each successfully loaded block."
                   (setq unevaluated-blocks (append unevaluated-blocks (list (cons blockname spec)))))
                  (unmet
                   (setq unmet-dependencies (append unmet-dependencies (list (cons blockname spec)))))
-                 (nil (if retry (while (not fail)
-                                  (loop for blk in (append unevaluated-blocks unmet-dependencies)
-                                        do (setq fail (funcall try-eval (car blk) (cdr blk)))
-                                        unless fail do (setq unevaluated-blocks (remove blk unevaluated-blocks))
-                                        (setq unmet-dependencies (remove blk unmet-dependencies))
-                                        and return t))))))
+                 (nil (if (eq errorhandling 'retry)
+                          (while (not fail)
+                            (loop for blk in (append unevaluated-blocks unmet-dependencies)
+                                  do (setq fail (funcall try-eval (car blk) (cdr blk)))
+                                  unless fail do (setq unevaluated-blocks (remove blk unevaluated-blocks))
+                                  (setq unmet-dependencies (remove blk unmet-dependencies))
+                                  and return t))))))
              (setq block-counter (+ 1 block-counter))))
          specs)
         (if (not unevaluated-blocks)
@@ -306,6 +326,16 @@ will be retried after each successfully loaded block."
                  (file-exists-p target-file))
         (org-babel-with-temp-filebuffer target-file
           (run-hooks 'org-babel-post-tangle-hook))))))
+
+(add-to-list 'command-switch-alist
+             (cons "error-handling"
+                   (lambda (arg)
+                     (setq org-dotemacs-error-handling
+                           (car command-line-args-left))))
+             (cons "tag-match"
+                   (lambda (arg)
+                     (setq org-dotemacs-tag-match
+                           (car command-line-args-left)))))
 
 (provide 'org-dotemacs)
 
