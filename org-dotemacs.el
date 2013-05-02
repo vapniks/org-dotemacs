@@ -124,6 +124,11 @@
 
 ;;; Code:
 
+(defcustom org-dotemacs-default-file "~/.dotemacs.org"
+  "The default org file containing the code blocks to load when `org-dotemacs-load-file' is called."
+  :group 'org
+  :type '(file :must-match t))
+
 (defvar org-dotemacs-error-handling 'skip
   "Indicates how errors should be handled by `org-dotemacs-load-blocks'.
 If eq to 'skip then errors will be skipped over (default).
@@ -211,16 +216,22 @@ the copied subtrees will be visited."
       buf)))
 
 ;;;###autoload
-(defun* org-dotemacs-load-file (&optional (file "~/.dotemacs.org") (match "") target-file)
+(defun* org-dotemacs-load-file (&optional match
+                                          (file org-dotemacs-default-file)
+                                          target-file)
   "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
 If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
 not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
  (the function will halt with an error in those cases)."
-  (interactive (list (read-file-name "File to load: " user-emacs-directory nil t nil
+  (interactive (list nil
+                     (read-file-name (format "File to load (default %s): " org-dotemacs-default-file)
+                                     (file-name-directory org-dotemacs-default-file)
+                                     org-dotemacs-default-file
+                                     t nil
                                      (lambda (file)
                                        (string-match "\\.org$" file)))
-                     nil
-                     (read-file-name "Save to file: " user-emacs-directory)))
+                     (if (y-or-n-p "Save elisp code to separate file?")
+                         (read-file-name "Save to file: " user-emacs-directory))))
   (if (and target-file (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file))
       (error "Refuse to overwrite %s" target-file))
   (require 'ob-core)
