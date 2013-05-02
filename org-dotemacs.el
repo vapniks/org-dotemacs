@@ -216,49 +216,6 @@ the copied subtrees will be visited."
       buf)))
 
 ;;;###autoload
-(defun* org-dotemacs-load-file (&optional match
-                                          (file org-dotemacs-default-file)
-                                          target-file)
-  "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
-If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
-not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
- (the function will halt with an error in those cases)."
-  (interactive (list nil
-                     (read-file-name (format "File to load (default %s): " org-dotemacs-default-file)
-                                     (file-name-directory org-dotemacs-default-file)
-                                     org-dotemacs-default-file
-                                     t nil
-                                     (lambda (file)
-                                       (string-match "\\.org$" file)))
-                     (if (y-or-n-p "Save elisp code to separate file?")
-                         (read-file-name "Save to file: " user-emacs-directory))))
-  (if (and target-file (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file))
-      (error "Refuse to overwrite %s" target-file))
-  (require 'ob-core)
-  (cl-flet ((age (file) (float-time
-                      (time-subtract (current-time)
-                                     (nth 5 (or (file-attributes (file-truename file))
-                                                (file-attributes file)))))))
-    (if (and target-file
-             (file-exists-p target-file)
-             (> (age file) (age target-file)))
-        (load-file target-file)
-      (let ((visited-p (get-file-buffer (expand-file-name file)))
-            matchbuf to-be-removed)
-        (save-window-excursion
-          (find-file file)
-          (setq to-be-removed (current-buffer))
-          (setq matchbuf (org-dotemacs-extract-subtrees (or org-dotemacs-tag-match match)))
-          (with-current-buffer matchbuf
-            ;; Write the buffer out first to prevent org-babel-pre-tangle-hook
-            ;; prompting for a filename to save it in.
-            (write-file (concat temporary-file-directory (buffer-name)))
-            (org-dotemacs-load-blocks target-file))
-          (kill-buffer matchbuf))
-        (unless visited-p
-          (kill-buffer to-be-removed))))))
-
-;;;###autoload
 (defun* org-dotemacs-load-blocks (&optional target-file (errorhandling org-dotemacs-error-handling))
   "Load the emacs-lisp code blocks in the current org-mode file.
 Save the blocks to TARGET-FILE if it is non-nil.
@@ -347,6 +304,49 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                  (file-exists-p target-file))
         (org-babel-with-temp-filebuffer target-file
           (run-hooks 'org-babel-post-tangle-hook))))))
+
+;;;###autoload
+(defun* org-dotemacs-load-file (&optional match
+                                          (file org-dotemacs-default-file)
+                                          target-file)
+  "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
+If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
+not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
+ (the function will halt with an error in those cases)."
+  (interactive (list nil
+                     (read-file-name (format "File to load (default %s): " org-dotemacs-default-file)
+                                     (file-name-directory org-dotemacs-default-file)
+                                     org-dotemacs-default-file
+                                     t nil
+                                     (lambda (file)
+                                       (string-match "\\.org$" file)))
+                     (if (y-or-n-p "Save elisp code to separate file?")
+                         (read-file-name "Save to file: " user-emacs-directory))))
+  (if (and target-file (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file))
+      (error "Refuse to overwrite %s" target-file))
+  (require 'ob-core)
+  (cl-flet ((age (file) (float-time
+                      (time-subtract (current-time)
+                                     (nth 5 (or (file-attributes (file-truename file))
+                                                (file-attributes file)))))))
+    (if (and target-file
+             (file-exists-p target-file)
+             (> (age file) (age target-file)))
+        (load-file target-file)
+      (let ((visited-p (get-file-buffer (expand-file-name file)))
+            matchbuf to-be-removed)
+        (save-window-excursion
+          (find-file file)
+          (setq to-be-removed (current-buffer))
+          (setq matchbuf (org-dotemacs-extract-subtrees (or org-dotemacs-tag-match match)))
+          (with-current-buffer matchbuf
+            ;; Write the buffer out first to prevent org-babel-pre-tangle-hook
+            ;; prompting for a filename to save it in.
+            (write-file (concat temporary-file-directory (buffer-name)))
+            (org-dotemacs-load-blocks target-file))
+          (kill-buffer matchbuf))
+        (unless visited-p
+          (kill-buffer to-be-removed))))))
 
 (provide 'org-dotemacs)
 
