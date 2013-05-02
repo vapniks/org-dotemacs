@@ -124,9 +124,6 @@
 
 ;;; Code:
 
-
-
-
 (defvar org-dotemacs-error-handling 'skip
   "Indicates how errors should be handled by `org-dotemacs-load-blocks'.
 If eq to 'skip then errors will be skipped over (default).
@@ -140,6 +137,19 @@ This variable can be set from the command line using the dotemacs-error-handling
 (defvar org-dotemacs-tag-match nil
   "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
 If non-nil the value of this variable will override the match argument to `org-dotemacs-load-file'.")
+
+(let* ((errpos (or (position-if (lambda (x) (equal x "-error-handling")) command-line-args)
+		   (position-if (lambda (x) (equal x "--error-handling")) command-line-args)))
+       (errval (if errpos (nth (+ 1 errpos) command-line-args)))
+       (tagpos (or (position-if (lambda (x) (equal x "-tag-match")) command-line-args)
+		   (position-if (lambda (x) (equal x "--tag-match")) command-line-args)))
+       (tagval (if tagpos (nth (+ 1 tagpos) command-line-args))))
+  (if errval 
+      (setq org-dotemacs-error-handling (intern errval)))
+  (if tagval (setq org-dotemacs-tag-match tagval)))
+
+(message "org-dotemacs: error-handling = %s" (concat "'" (symbol-name org-dotemacs-error-handling)))
+(message "org-dotemacs: tag-match = %s" org-dotemacs-tag-match)
 
 ;; This function was obtained from string-fns.el by Noah Friedman <friedman@splode.com>
 ;;;###autoload
@@ -238,7 +248,7 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
           (kill-buffer to-be-removed))))))
 
 ;;;###autoload
-(defun org-dotemacs-load-blocks (&optional target-file (errorhandling org-dotemacs-error-handling))
+(defun* org-dotemacs-load-blocks (&optional target-file (errorhandling org-dotemacs-error-handling))
   "Load the emacs-lisp code blocks in the current org-mode file.
 Save the blocks to TARGET-FILE if it is non-nil.
 See the definition of `org-dotemacs-error-handling' for an explanation of the ERRORHANDLING
@@ -308,15 +318,15 @@ argument which uses `org-dotemacs-error-handling' for its default value."
              (setq block-counter (+ 1 block-counter))))
          specs)
         (if (not unevaluated-blocks)
-            (message "\nAll blocks evaluated successfully!")
-          (message "\nSuccessfully evaluated the following %d code blocks: %s"
+            (message "\norg-dotemacs: All blocks evaluated successfully!")
+          (message "\norg-dotemacs: Successfully evaluated the following %d code blocks: %s"
                    (length evaluated-blocks)
                    (mapconcat 'identity evaluated-blocks " "))
-          (message "\nThe following %d code block%s errors: %s\n"
+          (message "\norg-dotemacs: The following %d code block%s errors: %s\n"
                    (length unevaluated-blocks)
                    (if (= 1 (length unevaluated-blocks)) " has" "s have")
                    (mapconcat 'car unevaluated-blocks " "))
-          (message "\nThe following %d code block%s unmet dependencies: %s\n"
+          (message "\norg-dotemacs: The following %d code block%s unmet dependencies: %s\n"
                    (length unmet-dependencies)
                    (if (= 1 (length unmet-dependencies)) " has" "s have")
                    (mapconcat 'car unmet-dependencies " "))))
@@ -326,16 +336,6 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                  (file-exists-p target-file))
         (org-babel-with-temp-filebuffer target-file
           (run-hooks 'org-babel-post-tangle-hook))))))
-
-(add-to-list 'command-switch-alist
-             (cons "error-handling"
-                   (lambda (arg)
-                     (setq org-dotemacs-error-handling
-                           (car command-line-args-left))))
-             (cons "tag-match"
-                   (lambda (arg)
-                     (setq org-dotemacs-tag-match
-                           (car command-line-args-left)))))
 
 (provide 'org-dotemacs)
 
