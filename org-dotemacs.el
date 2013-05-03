@@ -232,9 +232,12 @@ If optional arg LIMIT is specified, split into no more than that many
     (nreverse string-list)))
 
 ;;;###autoload
-(defun org-dotemacs-extract-subtrees (match)
+(defun org-dotemacs-extract-subtrees (match &optional exclude-todo-state include-todo-state)
   "Extract subtrees in current org-mode buffer that match tag MATCH.
 MATCH should be a tag match as detailed in the org manual.
+If EXCLUDE-TODO-STATE is non-nil then subtrees with todo states matching this regexp will be
+excluding, and if INCLUDE-TODO-STATE is non-nil then only subtrees with todo states matching
+this regexp will be included.
 The copied subtrees will be placed in a new buffer which is returned by this function.
 If called interactively MATCH is prompted from the user, and the new buffer containing
 the copied subtrees will be visited."
@@ -242,7 +245,13 @@ the copied subtrees will be visited."
   (let ((buf (generate-new-buffer (buffer-name)))
         todo-only copied-areas)
     (org-scan-tags (lambda nil
-                     (unless (loop for pair in copied-areas
+                     (unless (or (and exclude-todo-state
+                                      (string-match exclude-todo-state
+                                                    (org-get-todo-state)))
+                                 (and include-todo-state
+                                      (not (string-match include-todo-state
+                                                         (org-get-todo-state)))))
+                         (loop for pair in copied-areas
                                    if (and (>= (point) (car pair))
                                            (< (point) (cdr pair)))
                                    return t)
