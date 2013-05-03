@@ -237,14 +237,14 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                                  (ignore-errors (emacs-lisp-mode))
                                  (org-babel-spec-to-string spec)
                                  ;; evaluate the code
-                                 (message "Evaluating %s code block" blockname)
+                                 (message "org-dotemacs: Evaluating %s code block" blockname)
                                  (setq fail nil)
                                  (if (member errorhandling '(skip retry))
                                      (condition-case err
                                          (eval-buffer)
                                        (error
                                         (setq fail 'error)
-                                        (message "Error in %s code block: %s"
+                                        (message "org-dotemacs: Error in %s code block: %s"
                                                  blockname (error-message-string err))))
                                    (eval-buffer))
                                  (unless fail
@@ -297,17 +297,20 @@ argument which uses `org-dotemacs-error-handling' for its default value."
          specs)
         (if (and (not unevaluated-blocks) (not unmet-dependencies))
             (message "\norg-dotemacs: All blocks evaluated successfully!")
-          (message "\norg-dotemacs: Successfully evaluated the following %d code blocks: %s"
-                   (length evaluated-blocks)
-                   (mapconcat 'identity evaluated-blocks " "))
-          (message "\norg-dotemacs: The following %d code block%s errors: %s\n"
-                   (length unevaluated-blocks)
-                   (if (= 1 (length unevaluated-blocks)) " has" "s have")
-                   (mapconcat 'car unevaluated-blocks " "))
-          (message "\norg-dotemacs: The following %d code block%s unmet dependencies: %s\n"
-                   (length unmet-dependencies)
-                   (if (= 1 (length unmet-dependencies)) " has" "s have")
-                   (mapconcat 'car unmet-dependencies " "))))
+          (if evaluated-blocks
+              (message "\norg-dotemacs: Successfully evaluated the following %d code blocks: %s"
+                       (length evaluated-blocks)
+                       (mapconcat 'identity evaluated-blocks " ")))
+          (if unevaluated-blocks
+              (message "\norg-dotemacs: The following %d code block%s errors: %s\n"
+                       (length unevaluated-blocks)
+                       (if (= 1 (length unevaluated-blocks)) " has" "s have")
+                       (mapconcat 'car unevaluated-blocks " ")))
+          (if unmet-dependencies
+              (message "\norg-dotemacs: The following %d code block%s unmet dependencies: %s\n"
+                       (length unmet-dependencies)
+                       (if (= 1 (length unmet-dependencies)) " has" "s have")
+                       (mapconcat 'car unmet-dependencies " ")))))
       ;; run `org-babel-post-tangle-hook' in tangled file
       (when (and org-babel-post-tangle-hook
                  target-file
@@ -333,7 +336,7 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
                      (if (y-or-n-p "Save elisp code to separate file?")
                          (read-file-name "Save to file: " user-emacs-directory))))
   (if (and target-file (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file))
-      (error "Refuse to overwrite %s" target-file))
+      (error "org-dotemacs: Refuse to overwrite %s" target-file))
   (require 'ob-core)
   (cl-flet ((age (file) (float-time
                       (time-subtract (current-time)
