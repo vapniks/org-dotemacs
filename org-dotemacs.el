@@ -83,6 +83,10 @@
 ;; (setq scroll-conservatively 5)
 ;; #+END_SRC
 
+;; You can get a nice columns view of your code blocks by adding the following line to the top of the org file:
+;;
+;; #+COLUMNS: %35ITEM %15NAME %35DEPENDS %15TAGS %TODO
+;;
 ;; To load code blocks on startup you need to ensure that this file is loaded before calling
 ;; `org-dotemacs-load-default', see installation below.
 ;; If you do M-x org-dotemacs-load-default, you will be prompted for a tag match and the corresponding
@@ -102,7 +106,10 @@
 ;;
 ;; org-dotemacs.el will look for two command line options when loaded: error-handling (for setting the value of
 ;; `org-dotemacs-error-handling') and tag-match (for specifying which headers to load).
-;; For example if you enter the following at the command line: emacs --error-handling retry --tag-match "settings-mouse"
+;; For example if you enter the following at the command line:
+;;
+;;        emacs --error-handling retry --tag-match "settings-mouse"
+;;
 ;; Then only code blocks tagged "settings" but not "mouse" will be loaded, and org-dotemacs will try to reload any
 ;; blocks that have errors.
 
