@@ -246,9 +246,9 @@ If optional arg LIMIT is specified, split into no more than that many
     (nreverse string-list)))
 
 ;;;###autoload
-(defun org-dotemacs-extract-subtrees (match &optional
-                                            (exclude-todo-state org-dotemacs-exclude-todo)
-                                            (include-todo-state org-dotemacs-include-todo))
+(defun* org-dotemacs-extract-subtrees (match &optional
+                                             (exclude-todo-state org-dotemacs-exclude-todo)
+                                             (include-todo-state org-dotemacs-include-todo))
   "Extract subtrees in current org-mode buffer that match tag MATCH.
 MATCH should be a tag match as detailed in the org manual.
 If EXCLUDE-TODO-STATE is non-nil then subtrees with todo states matching this regexp will be
@@ -267,10 +267,10 @@ the copied subtrees will be visited."
                                  (and include-todo-state
                                       (not (string-match include-todo-state
                                                          (org-get-todo-state)))))
-                         (loop for pair in copied-areas
-                                   if (and (>= (point) (car pair))
-                                           (< (point) (cdr pair)))
-                                   return t)
+                       (loop for pair in copied-areas
+                             if (and (>= (point) (car pair))
+                                     (< (point) (cdr pair)))
+                             return t)
                        (let ((start (point)) end)
                          (org-copy-subtree)
                          (setq end (+ start (length (current-kill 0 t))))
@@ -285,7 +285,8 @@ the copied subtrees will be visited."
       buf)))
 
 ;;;###autoload
-(defun* org-dotemacs-load-blocks (&optional target-file (error-handling org-dotemacs-error-handling))
+(defun* org-dotemacs-load-blocks (&optional target-file
+                                            (error-handling org-dotemacs-error-handling))
   "Load the emacs-lisp code blocks in the current org-mode file.
 Save the blocks to TARGET-FILE if it is non-nil.
 See the definition of `org-dotemacs-error-handling' for an explanation of the ERROR-HANDLING
