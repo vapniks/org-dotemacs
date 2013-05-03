@@ -196,6 +196,20 @@ This variable can be set from the command line using the dotemacs-error-handling
   :group 'org-dotemacs
   :type 'symbol)
 
+(defcustom org-dotemacs-include-todo nil
+  "A regular expression matching TODO states to be included.
+If non-nil then only headers with TODO states matching this regexp will be checked for code blocks.
+See also `org-dotemacs-exclude-todo'."
+  :group 'org-dotemacs
+  :type 'regexp)
+
+(defcustom org-dotemacs-exclude-todo "BROKEN"
+  "A regular expression matching TODO states to be excluded.
+If non-nil then headers with TODO states matching this regexp will not be checked for code blocks.
+See also `org-dotemacs-include-todo'."
+  :group 'org-dotemacs
+  :type 'regexp)
+
 (defvar org-dotemacs-tag-match nil
   "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
 If non-nil the value of this variable will override the match argument to `org-dotemacs-load-file'.")
@@ -232,7 +246,9 @@ If optional arg LIMIT is specified, split into no more than that many
     (nreverse string-list)))
 
 ;;;###autoload
-(defun org-dotemacs-extract-subtrees (match &optional exclude-todo-state include-todo-state)
+(defun org-dotemacs-extract-subtrees (match &optional
+                                            (exclude-todo-state org-dotemacs-exclude-todo)
+                                            (include-todo-state org-dotemacs-include-todo))
   "Extract subtrees in current org-mode buffer that match tag MATCH.
 MATCH should be a tag match as detailed in the org manual.
 If EXCLUDE-TODO-STATE is non-nil then subtrees with todo states matching this regexp will be
