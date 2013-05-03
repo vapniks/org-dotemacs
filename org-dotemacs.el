@@ -1,4 +1,4 @@
-;;; org-dotemacs.el --- Store your emacs config as an org file.
+;;; org-dotemacs.el --- Store your emacs config as an org file, and choose which bits to load.
 
 ;; Filename: org-dotemacs.el
 ;; Description: Store your emacs config as an org file, and load code snippets based on tag matches.
@@ -12,11 +12,11 @@
 ;; URL: http://www.emacswiki.org/emacs/download/org-dotemacs.el
 ;; Keywords: local
 ;; Compatibility: GNU Emacs 24.3.1
-;; Package-Requires: ((org "7.9.3"))
+;; Package-Requires: ((org "7.9.3") (cl-lib "1.0"))
 ;;
 ;; Features that might be required by this library:
 ;;
-;; org
+;; org cl
 ;;
 
 ;;; This file is NOT part of GNU Emacs
@@ -38,7 +38,9 @@
 ;; If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary: 
-;; 
+;;
+;; Bitcoin donations gratefully accepted: 1Ph9srQBspJCDS9CnGUyWJPTrU4ydX9Aa3
+;;
 ;; Keeping your emacs config in an org file makes it easier for you to keep your .emacs under control,
 ;; and avoid dotemacs bankruptcy (http://www.emacswiki.org/emacs/DotEmacsBankruptcy).
 ;; With your config code stored in an org file you can easily edit the structure and keep notes.
@@ -81,20 +83,28 @@
 ;; (setq scroll-conservatively 5)
 ;; #+END_SRC
 
-;; Then if you do M-x org-dotemacs-load-default, you will be prompted for a tag match and the corresponding
-;; code blocks will be loaded (enter an empty tag match string to load all blocks).
-;; If you have another org dotemacs file you can use `org-dotemacs-load-file' to load the code blocks from
-;; this file and optionally save them to an elisp file.
 ;; To load code blocks on startup you need to ensure that this file is loaded before calling
 ;; `org-dotemacs-load-default', see installation below.
+;; If you do M-x org-dotemacs-load-default, you will be prompted for a tag match and the corresponding
+;; code blocks will be loaded (enter an empty tag match string to load all blocks). In this way you can load
+;; just the parts of your config file that you need, when you need them.
+;; If you have another org dotemacs file you can use `org-dotemacs-load-file' to load the code blocks from
+;; this file and optionally save them to an elisp file. This can be loaded from your .emacs faster than
+;; the org file.
 ;;
-;; Error handling can be controlled by customizing
+;; Error handling can be controlled by customizing `org-dotemacs-error-handling' or by setting the error-handling
+;; command line option when starting emacs.
+;; By default code blocks with unmet dependencies or errors are skipped over as soon as an error is encountered,
+;; but you can also specify that org-dotemacs should halt or try to reload the blocks.
+;; In the latter case each time a new block is successfully loaded, any unsuccessful blocks will be retried.
 ;;
-;; Command line invocation:
+;; Command line options:
 ;;
-;; You can 
-
-
+;; org-dotemacs.el will look for two command line options when loaded: error-handling (for setting the value of
+;; `org-dotemacs-error-handling') and tag-match (for specifying which headers to load).
+;; For example if you enter the following at the command line: emacs --error-handling retry --tag-match "settings-mouse"
+;; Then only code blocks tagged "settings" but not "mouse" will be loaded, and org-dotemacs will try to reload any
+;; blocks that have errors.
 
 
 ;;; Installation:
@@ -105,20 +115,24 @@
 ;; where ~/elisp is the directory you want to add 
 ;; (you don't need to do this for ~/.emacs.d - it's added by default).
 ;;
-;; Then add the following lines to the end of your .emacs file
+;; Then make sure you have an ~/.dotemacs.org file and add the following lines to
+;; the end of your .emacs file:
+;;
 ;; (load-file "~/.emacs.d/org-dotemacs.el")
-;; (org-dotemacs-load-file)
-
-;; If you stored your org file somewhere else you can specify the location as the first argument to
-;; the `org-dotemacs-load-file' function, e.g:
+;; (org-dotemacs-load-default)
 ;;
-;; (org-dotemacs-load-file "~/.emacs.d/my_emacs_config.org")
+;; or if you want to just load code blocks matching a tag match:
 ;;
-;; You can also specify a tag match in the second argument to limit which code blocks are loaded, e.g:
-;;
-;; (org-dotemacs-load-file "~/.emacs.d/my_emacs_config.org" "linux|basic-windows")
+;; (load-file "~/.emacs.d/org-dotemacs.el")
+;; (org-dotemacs-load-default "<TAG-MATCH>")
 ;;
 ;; See the org manual "Matching tags and properties" section for more details on tag matches.
+
+;; To load a different org file either customize `org-dotemacs-default-file' or use the
+;; `org-dotemacs-load-file' function, e.g:
+;;
+;; (load-file "~/.emacs.d/org-dotemacs.el")
+;; (org-dotemacs-load-file "~/.emacs.d/my_emacs_config.org" "<TAG-MATCH>")
 ;;
 
 ;;; Customize:
@@ -155,7 +169,7 @@
 ;;; Code:
 
 (defgroup org-dotemacs nil
-  "Store your emacs config as an org file."
+  "Store your emacs config as an org file, and choose which bits to load."
   :group 'org)
 
 (defcustom org-dotemacs-default-file "~/.dotemacs.org"
@@ -239,10 +253,10 @@ the copied subtrees will be visited."
       buf)))
 
 ;;;###autoload
-(defun* org-dotemacs-load-blocks (&optional target-file (errorhandling org-dotemacs-error-handling))
+(defun* org-dotemacs-load-blocks (&optional target-file (error-handling org-dotemacs-error-handling))
   "Load the emacs-lisp code blocks in the current org-mode file.
 Save the blocks to TARGET-FILE if it is non-nil.
-See the definition of `org-dotemacs-error-handling' for an explanation of the ERRORHANDLING
+See the definition of `org-dotemacs-error-handling' for an explanation of the ERROR-HANDLING
 argument which uses `org-dotemacs-error-handling' for its default value."
   (run-hooks 'org-babel-pre-tangle-hook)
   (save-restriction
@@ -262,7 +276,7 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                                  ;; evaluate the code
                                  (message "org-dotemacs: Evaluating %s code block" blockname)
                                  (setq fail nil)
-                                 (if (member errorhandling '(skip retry))
+                                 (if (member error-handling '(skip retry))
                                      (condition-case err
                                          (eval-buffer)
                                        (error
@@ -309,7 +323,7 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                   (setq unevaluated-blocks (append unevaluated-blocks (list (cons blockname spec)))))
                  (unmet
                   (setq unmet-dependencies (append unmet-dependencies (list (cons blockname spec)))))
-                 (nil (if (eq errorhandling 'retry)
+                 (nil (if (eq error-handling 'retry)
                           (while (not fail)
                             (loop for blk in (append unevaluated-blocks unmet-dependencies)
                                   do (setq fail (funcall try-eval (car blk) (cdr blk)))
