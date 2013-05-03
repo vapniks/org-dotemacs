@@ -43,15 +43,13 @@
 ;; and avoid dotemacs bankruptcy (http://www.emacswiki.org/emacs/DotEmacsBankruptcy).
 ;; With your config code stored in an org file you can easily edit the structure and keep notes.
 ;; This library allows you to load elisp code from an org file on emacs startup.
-;; You can also limit the code that is loaded to certain tagged headers using an org tag match
-;; (see "Matching tags and properties" in the org manual), and get emacs to try reloading blocks.
-;;
+;; You can also limit the code that is loaded to certain tagged headers using an org tag match,
+;; and specify dependencies between code blocks.
+;; 
+;; First you need to create an org file ~/.dotemacs.org and add your config code to emacs-lisp code blocks
+;; in this file. You can use another file location if you wish, see `org-dotemacs-default-file' below.
+;; The org file could look something like this:
 
-;;; Installation:
-;;
-;; First you need to create an org file ~/.dotemacs.org and add your config code to emacs-lisp code blocks in the file,
-;; e.g. like this:
-;;
 ;; * Display settings code
 ;; #+BEGIN_SRC emacs-lisp
 ;; (setq line-number-mode t)
@@ -62,13 +60,49 @@
 ;; (set-cursor-color "White")
 ;; #+END_SRC
 ;; * Scrolling settings code
-;; #+NAME: scroll_settings
 ;; #+BEGIN_SRC emacs-lisp
 ;; (mouse-wheel-mode t)
 ;; (setq scroll-step 1)
 ;; (setq scroll-conservatively 5)
 ;; #+END_SRC
 
+;; To aid debugging you can name the code blocks by adding NAME properties to the corresponding org headers
+;; (see the "Properties and columns" in the org manual). You can also introduce dependencies between the
+;; blocks by creating DEPENDS properties containing space separated lists of block names. org-dotemacs will
+;; only load a block if all its dependencies have already been successfully loaded.
+;; You may also decide to tag the headers so that you can filter out which code blocks to load with a tag match
+;; (see "Matching tags and properties" in the org manual). 
+;; After doing that your .dotemacs.org file might look something like this:
+
+;; * Display settings code                :settings:
+;;   :PROPERTIES:
+;;   :DEPENDS: 
+;;   :NAME:     display_settings
+;;   :END:
+;; #+BEGIN_SRC emacs-lisp
+;; (setq line-number-mode t)
+;; (setq column-number-mode t)
+;; (setq frame-title-format "%b")
+;; (set-background-color "Black")
+;; (set-foreground-color "White")
+;; (set-cursor-color "White")
+;; #+END_SRC
+;; * Scrolling settings code              :settings:
+;;   :PROPERTIES:
+;;   :DEPENDS:  display_settings other_settings
+;;   :NAME:     scrolling_settings
+;;   :END:
+;; #+BEGIN_SRC emacs-lisp
+;; (mouse-wheel-mode t)
+;; (setq scroll-step 1)
+;; (setq scroll-conservatively 5)
+;; #+END_SRC
+
+;; 
+
+
+;;; Installation:
+;;
 ;; Put org-dotemacs.el in a directory in your load-path, e.g. ~/.emacs.d/
 ;; You can add a directory to your load-path with the following line in ~/.emacs
 ;; (add-to-list 'load-path (expand-file-name "~/elisp"))
@@ -93,8 +127,8 @@
 
 ;;; Customize:
 ;;
-;; To automatically insert descriptions of customizable variables defined in this buffer
-;; place point at the beginning of the next line and do: M-x insert-customizable-variable-descriptions
+;; `org-dotemacs-default-file' : The default org file containing the code blocks to load when `org-dotemacs-load-file'
+;;                               is called.
 
 ;;
 ;; All of the above can customized by:
@@ -129,7 +163,7 @@
   :group 'org
   :type '(file :must-match t))
 
-(defvar org-dotemacs-error-handling 'skip
+(defcustom org-dotemacs-error-handling 'skip
   "Indicates how errors should be handled by `org-dotemacs-load-blocks'.
 If eq to 'skip then errors will be skipped over (default).
 If eq to 'retry then `org-dotemacs-load-blocks' will attempt to reload any blocks containing errors,
@@ -137,24 +171,13 @@ after each successfully loaded block.
 In all other cases errors will cause evaluation to halt as normal.
 In all cases errors will be reported in the *Messages* buffer as normal.
 
-This variable can be set from the command line using the dotemacs-error-handling argument.")
+This variable can be set from the command line using the dotemacs-error-handling argument."
+  :group 'org
+  :type 'symbol)
 
 (defvar org-dotemacs-tag-match nil
   "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
 If non-nil the value of this variable will override the match argument to `org-dotemacs-load-file'.")
-
-(let* ((errpos (or (position-if (lambda (x) (equal x "-error-handling")) command-line-args)
-		   (position-if (lambda (x) (equal x "--error-handling")) command-line-args)))
-       (errval (if errpos (nth (+ 1 errpos) command-line-args)))
-       (tagpos (or (position-if (lambda (x) (equal x "-tag-match")) command-line-args)
-		   (position-if (lambda (x) (equal x "--tag-match")) command-line-args)))
-       (tagval (if tagpos (nth (+ 1 tagpos) command-line-args))))
-  (if errval 
-      (setq org-dotemacs-error-handling (intern errval)))
-  (if tagval (setq org-dotemacs-tag-match tagval)))
-
-(message "org-dotemacs: error-handling = %s" (concat "'" (symbol-name org-dotemacs-error-handling)))
-(message "org-dotemacs: tag-match = %s" org-dotemacs-tag-match)
 
 ;; This function was obtained from string-fns.el by Noah Friedman <friedman@splode.com>
 ;;;###autoload
@@ -321,11 +344,14 @@ argument which uses `org-dotemacs-error-handling' for its default value."
 ;;;###autoload
 (defun* org-dotemacs-load-file (&optional match
                                           (file org-dotemacs-default-file)
-                                          target-file)
+                                          target-file
+                                          (error-handling org-dotemacs-error-handling))
   "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
 If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
 not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
- (the function will halt with an error in those cases)."
+ (the function will halt with an error in those cases).
+The optional argument ERROR-HANDLING determines how errors are handled and takes default value
+`org-dotemacs-error-handling' (which see)."
   (interactive (list nil
                      (read-file-name (format "File to load (default %s): " org-dotemacs-default-file)
                                      (file-name-directory org-dotemacs-default-file)
@@ -339,9 +365,9 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
       (error "org-dotemacs: Refuse to overwrite %s" target-file))
   (require 'ob-core)
   (cl-flet ((age (file) (float-time
-                      (time-subtract (current-time)
-                                     (nth 5 (or (file-attributes (file-truename file))
-                                                (file-attributes file)))))))
+                         (time-subtract (current-time)
+                                        (nth 5 (or (file-attributes (file-truename file))
+                                                   (file-attributes file)))))))
     (if (and target-file
              (file-exists-p target-file)
              (> (age file) (age target-file)))
@@ -356,7 +382,7 @@ not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
             ;; Write the buffer out first to prevent org-babel-pre-tangle-hook
             ;; prompting for a filename to save it in.
             (write-file (concat temporary-file-directory (buffer-name)))
-            (org-dotemacs-load-blocks target-file))
+            (org-dotemacs-load-blocks target-file error-handling))
           (kill-buffer matchbuf))
         (unless visited-p
           (kill-buffer to-be-removed))))))
@@ -367,6 +393,20 @@ Unlike `org-dotemacs-load-file' the user is not prompted for the location of any
 and no code is saved."
   (interactive (list nil))
   (org-dotemacs-load-file match org-dotemacs-default-file nil))
+
+;; Code to handle command line arguments
+(let* ((errpos (or (position-if (lambda (x) (equal x "-error-handling")) command-line-args)
+		   (position-if (lambda (x) (equal x "--error-handling")) command-line-args)))
+       (errval (if errpos (nth (+ 1 errpos) command-line-args)))
+       (tagpos (or (position-if (lambda (x) (equal x "-tag-match")) command-line-args)
+		   (position-if (lambda (x) (equal x "--tag-match")) command-line-args)))
+       (tagval (if tagpos (nth (+ 1 tagpos) command-line-args))))
+  (if errval 
+      (setq org-dotemacs-error-handling (intern errval)))
+  (if tagval (setq org-dotemacs-tag-match tagval)))
+
+(message "org-dotemacs: error-handling = %s" (concat "'" (symbol-name org-dotemacs-error-handling)))
+(message "org-dotemacs: tag-match = %s" org-dotemacs-tag-match)
 
 (provide 'org-dotemacs)
 
