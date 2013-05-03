@@ -48,24 +48,7 @@
 ;; 
 ;; First you need to create an org file ~/.dotemacs.org and add your config code to emacs-lisp code blocks
 ;; in this file. You can use another file location if you wish, see `org-dotemacs-default-file' below.
-;; The org file could look something like this:
-
-;; * Display settings code
-;; #+BEGIN_SRC emacs-lisp
-;; (setq line-number-mode t)
-;; (setq column-number-mode t)
-;; (setq frame-title-format "%b")
-;; (set-background-color "Black")
-;; (set-foreground-color "White")
-;; (set-cursor-color "White")
-;; #+END_SRC
-;; * Scrolling settings code
-;; #+BEGIN_SRC emacs-lisp
-;; (mouse-wheel-mode t)
-;; (setq scroll-step 1)
-;; (setq scroll-conservatively 5)
-;; #+END_SRC
-
+;;
 ;; To aid debugging you can name the code blocks by adding NAME properties to the corresponding org headers
 ;; (see the "Properties and columns" in the org manual). You can also introduce dependencies between the
 ;; blocks by creating DEPENDS properties containing space separated lists of block names. org-dotemacs will
@@ -87,7 +70,7 @@
 ;; (set-foreground-color "White")
 ;; (set-cursor-color "White")
 ;; #+END_SRC
-;; * Scrolling settings code              :settings:
+;; * Scrolling settings code              :settings:mouse:
 ;;   :PROPERTIES:
 ;;   :DEPENDS:  display_settings other_settings
 ;;   :NAME:     scrolling_settings
@@ -98,7 +81,20 @@
 ;; (setq scroll-conservatively 5)
 ;; #+END_SRC
 
-;; 
+;; Then if you do M-x org-dotemacs-load-default, you will be prompted for a tag match and the corresponding
+;; code blocks will be loaded (enter an empty tag match string to load all blocks).
+;; If you have another org dotemacs file you can use `org-dotemacs-load-file' to load the code blocks from
+;; this file and optionally save them to an elisp file.
+;; To load code blocks on startup you need to ensure that this file is loaded before calling
+;; `org-dotemacs-load-default', see installation below.
+;;
+;; Error handling can be controlled by customizing
+;;
+;; Command line invocation:
+;;
+;; You can 
+
+
 
 
 ;;; Installation:
@@ -129,7 +125,7 @@
 ;;
 ;; `org-dotemacs-default-file' : The default org file containing the code blocks to load when `org-dotemacs-load-file'
 ;;                               is called.
-
+;; `org-dotemacs-error-handling' : Specify how errors are handled.
 ;;
 ;; All of the above can customized by:
 ;;      M-x customize-group RET org-dotemacs RET
@@ -158,9 +154,13 @@
 
 ;;; Code:
 
+(defgroup org-dotemacs nil
+  "Store your emacs config as an org file."
+  :group 'org)
+
 (defcustom org-dotemacs-default-file "~/.dotemacs.org"
   "The default org file containing the code blocks to load when `org-dotemacs-load-file' is called."
-  :group 'org
+  :group 'org-dotemacs
   :type '(file :must-match t))
 
 (defcustom org-dotemacs-error-handling 'skip
@@ -172,7 +172,7 @@ In all other cases errors will cause evaluation to halt as normal.
 In all cases errors will be reported in the *Messages* buffer as normal.
 
 This variable can be set from the command line using the dotemacs-error-handling argument."
-  :group 'org
+  :group 'org-dotemacs
   :type 'symbol)
 
 (defvar org-dotemacs-tag-match nil
