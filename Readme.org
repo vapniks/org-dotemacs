@@ -1,20 +1,20 @@
 * Library Information
 org-dotemacs.el --- Store your emacs config as an org file, and choose which bits to load.
 
-Filename: org-dotemacs.el
-Description: Store your emacs config as an org file, and load code snippets based on tag matches.
-Author: Joe Bloggs <vapniks@yahoo.com>
-Maintainer: Joe Bloggs <vapniks@yahoo.com>
-Copyleft (Ↄ) 2013, Joe Bloggs, all rites reversed.
-Created: 2013-04-27 20:19:18
-Version: 0.1
-Last-Updated: 2013-04-27 20:19:18
-        By: Joe Bloggs
-URL: https://github.com/vapniks/org-dotemacs
-Keywords: local
-Compatibility: GNU Emacs 24.3.1
-Package-Requires: ((org "7.9.3") (cl-lib "1.0"))
-Features that might be required by this library: org cl
+Filename: org-dotemacs.el\\
+Description: Store your emacs config as an org file, and load code snippets based on tag matches.\\
+Author: Joe Bloggs <vapniks@yahoo.com>\\
+Maintainer: Joe Bloggs <vapniks@yahoo.com>\\
+Copyleft (Ↄ) 2013, Joe Bloggs, all rites reversed.\\
+Created: 2013-04-27 20:19:18\\
+Version: 0.1\\
+Last-Updated: 2013-04-27 20:19:18\\
+        By: Joe Bloggs\\
+URL: https://github.com/vapniks/org-dotemacs\\
+Keywords: local\\
+Compatibility: GNU Emacs 24.3.1\\
+Package-Requires: ((org "7.9.3") (cl-lib "1.0"))\\
+Features that might be required by this library: org cl\\
 
 This file is NOT part of GNU Emacs
 
@@ -47,15 +47,16 @@ Use the `org-dotemacs-load-file' command for this and specify a target file when
 * Structure of the org file 
 The elisp code should be contained in emacs-lisp code blocks, e.g:
 
-
-~#+BEGIN_SRC emacs-lisp~
-  ~(setq line-number-mode t)~
-  ~(setq column-number-mode t)~
-  ~(setq frame-title-format "%b")~
-  ~(set-background-color "Black")~
-  ~(set-foreground-color "White")~
-  ~(set-cursor-color "White")
-~#+END_SRC~
+#+BEGIN_VERSE
+#+BEGIN_SRC emacs-lisp
+  (setq line-number-mode t)
+  (setq column-number-mode t)
+  (setq frame-title-format "%b")
+  (set-background-color "Black")
+  (set-foreground-color "White")
+  (set-cursor-color "White")
+#+END_SRC
+#+END_VERSE
 
 Ideally you should have each code block under a separate org subtree, then you can use properties to
 name the blocks and define dependencies, and tags and todo states to specify which blocks
