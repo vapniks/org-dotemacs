@@ -6,10 +6,10 @@
 ;; Maintainer: Joe Bloggs <vapniks@yahoo.com>
 ;; Copyleft (Ↄ) 2013, Joe Bloggs, all rites reversed.
 ;; Created: 2013-04-27 20:19:18
-;; Version: 0.1
+;; Version: 0.2
 ;; Last-Updated: 2013-04-27 20:19:18
 ;;           By: Joe Bloggs
-;; URL: http://www.emacswiki.org/emacs/download/org-dotemacs.el
+;; URL: https://github.com/vapniks/org-dotemacs
 ;; Keywords: local
 ;; Compatibility: GNU Emacs 24.3.1
 ;; Package-Requires: ((org "7.9.3") (cl-lib "1.0"))
@@ -174,15 +174,19 @@
 
 ;;; Customize:
 ;;
-;; `org-dotemacs-default-file' : The default org file containing the code blocks to load when `org-dotemacs-load-file'
-;;                               is called.
-;; `org-dotemacs-error-handling' : Specify how errors are handled.
+;; `org-dotemacs-default-file' : The default org file containing the code blocks to load when `org-dotemacs-load-file' is called.
+;; `org-dotemacs-error-handling' : Indicates how errors should be handled by `org-dotemacs-load-blocks'.
+;; `org-dotemacs-include-todo' : A regular expression matching TODO states to be included.
+;; `org-dotemacs-exclude-todo' : A regular expression matching TODO states to be excluded.
 ;;
 ;; All of the above can customized by:
 ;;      M-x customize-group RET org-dotemacs RET
 ;;
 
 ;;; Change log:
+;; 4-May-2013      
+;;    Last-Updated: 2013-04-27 20:19:18 (Joe Bloggs)
+;;    ;;    
 ;;	
 ;; 2013/04/27
 ;;      * First released.
@@ -195,7 +199,6 @@
 
 ;;; TODO
 ;;
-;; Upload to elpa/melpa/marmalade and emacswiki
 ;;
 ;; 
 
@@ -490,7 +493,7 @@ and no code is saved."
 
 (provide 'org-dotemacs)
 
-;;; org-dotemacs.el ends here
-
 ;; (magit-push)
 ;; (yaoddmuse-post "EmacsWiki" "org-dotemacs.el" (buffer-name) (buffer-string) "update")
+
+;;; org-dotemacs.el ends here
