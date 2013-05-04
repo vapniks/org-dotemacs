@@ -49,12 +49,12 @@ The elisp code should be contained in emacs-lisp code blocks, e.g:
 
 
 ~#+BEGIN_SRC emacs-lisp~
-  (setq line-number-mode t)
-  (setq column-number-mode t)
-  (setq frame-title-format "%b")
-  (set-background-color "Black")
-  (set-foreground-color "White")
-  (set-cursor-color "White")
+  ~(setq line-number-mode t)~
+  ~(setq column-number-mode t)~
+  ~(setq frame-title-format "%b")~
+  ~(set-background-color "Black")~
+  ~(set-foreground-color "White")~
+  ~(set-cursor-color "White")
 ~#+END_SRC~
 
 Ideally you should have each code block under a separate org subtree, then you can use properties to
