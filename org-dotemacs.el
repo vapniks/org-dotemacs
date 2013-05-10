@@ -349,9 +349,9 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                                      (condition-case err
                                          (eval-buffer)
                                        (error
-                                        (setq fail 'error)
+                                        (setq fail (error-message-string err))
                                         (message "org-dotemacs: Error in %s code block: %s"
-                                                 blockname (error-message-string err))))
+                                                 blockname fail)))
                                    (eval-buffer))
                                  (unless fail
                                    (setq evaluated-blocks (append evaluated-blocks (list blockname)))
@@ -387,18 +387,17 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                                                               subtreedeps)
                                                       "[ ,\f\t\n\r\v]+"))))
              (let ((fail (funcall try-eval spec blockname blockdeps)))
-               (case fail
-                 (error
-                  (setq unevaluated-blocks (append unevaluated-blocks (list (cons blockname spec)))))
-                 (unmet
-                  (setq unmet-dependencies (append unmet-dependencies (list (cons blockname spec)))))
-                 (nil (if (eq error-handling 'retry)
-                          (while (not fail)
-                            (loop for blk in (append unevaluated-blocks unmet-dependencies)
-                                  do (setq fail (funcall try-eval (car blk) (cdr blk)))
-                                  unless fail do (setq unevaluated-blocks (remove blk unevaluated-blocks)
-                                                       unmet-dependencies (remove blk unmet-dependencies))
-                                  and return t))))))
+               (cond ((stringp fail)
+                      (setq unevaluated-blocks (append unevaluated-blocks (list (list spec blockname blockdeps fail)))))
+                     ((eq fail 'unmet)
+                      (setq unmet-dependencies (append unmet-dependencies (list (list spec blockname blockdeps)))))
+                     (t (if (eq error-handling 'retry)
+                            (while (and (not fail) (or unevaluated-blocks unmet-dependencies))
+                              (loop for blk in (append unevaluated-blocks unmet-dependencies)
+                                    do (setq fail (funcall try-eval (car blk) (second blk) (third blk)))
+                                    unless fail do (setq unevaluated-blocks (remove blk unevaluated-blocks)
+                                                         unmet-dependencies (remove blk unmet-dependencies))
+                                    and return t))))))
              (setq block-counter (+ 1 block-counter))))
          specs)
         (if (and (not unevaluated-blocks) (not unmet-dependencies))
@@ -408,15 +407,19 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                        (length evaluated-blocks)
                        (mapconcat 'identity evaluated-blocks " ")))
           (if unevaluated-blocks
-              (message "\norg-dotemacs: The following %d code block%s errors: %s\n"
+              (message "\norg-dotemacs: The following %d code block%s errors: \n %s\n"
                        (length unevaluated-blocks)
                        (if (= 1 (length unevaluated-blocks)) " has" "s have")
-                       (mapconcat 'car unevaluated-blocks " ")))
+                       (mapconcat (lambda (blk) (concat "   " (second blk)
+                                                        " block error: " (fourth blk) "\n"))
+                                  unevaluated-blocks " ")))
           (if unmet-dependencies
-              (message "\norg-dotemacs: The following %d code block%s unmet dependencies: %s\n"
+              (message "\norg-dotemacs: The following %d code block%s unmet dependencies: \n %s\n"
                        (length unmet-dependencies)
                        (if (= 1 (length unmet-dependencies)) " has" "s have")
-                       (mapconcat 'car unmet-dependencies " ")))))
+                       (mapconcat (lambda (blk) (concat "   " (second blk)
+                                                        " block depends on blocks: " (third blk)))
+                                  unmet-dependencies " ")))))
       ;; run `org-babel-post-tangle-hook' in tangled file
       (when (and org-babel-post-tangle-hook
                  target-file
