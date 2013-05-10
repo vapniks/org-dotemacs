@@ -302,11 +302,11 @@ the copied subtrees will be visited."
 				   (and include-todo-state
 					todo-state
 					(not (string-match include-todo-state
-							   todo-state))))
-			 (loop for pair in copied-areas
-			       if (and (>= (point) (car pair))
-				       (< (point) (cdr pair)))
-			       return t)
+							   todo-state)))
+                                   (loop for pair in copied-areas
+                                         if (and (>= (point) (car pair))
+                                                 (< (point) (cdr pair)))
+                                         return t))
 			 (let ((start (point)) end)
 			   (org-copy-subtree)
 			   (setq end (+ start (length (current-kill 0 t))))
