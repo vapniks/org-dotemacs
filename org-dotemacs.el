@@ -6,8 +6,8 @@
 ;; Maintainer: Joe Bloggs <vapniks@yahoo.com>
 ;; Copyleft (Ↄ) 2013, Joe Bloggs, all rites reversed.
 ;; Created: 2013-04-27 20:19:18
-;; Version: 0.2
-;; Last-Updated: 2013-04-27 20:19:18
+;; Version: 0.3
+;; Last-Updated: 2013-09-09 20:19:18
 ;;           By: Joe Bloggs
 ;; URL: https://github.com/vapniks/org-dotemacs
 ;; Keywords: local
