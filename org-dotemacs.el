@@ -467,10 +467,11 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
           (setq to-be-removed (current-buffer))
           (setq matchbuf (org-dotemacs-extract-subtrees (or org-dotemacs-tag-match match)))
           (with-current-buffer matchbuf
-            ;; Write the buffer out first to prevent org-babel-pre-tangle-hook
+            ;; Hack: write the buffer out first to prevent org-babel-pre-tangle-hook
             ;; prompting for a filename to save it in.
             (write-file (concat temporary-file-directory (buffer-name)))
-            (org-dotemacs-load-blocks target-file error-handling))
+            (org-dotemacs-load-blocks target-file error-handling)
+            (write-file (concat temporary-file-directory (buffer-name))))
           (kill-buffer matchbuf))
         (unless visited-p
           (kill-buffer to-be-removed))))))
