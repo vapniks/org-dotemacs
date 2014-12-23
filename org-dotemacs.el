@@ -44,6 +44,7 @@
 ;; Keeping your emacs config in an org file makes it easier for you to keep your .emacs under control,
 ;; and avoid DotEmacsBankruptcy.
 ;; With your config code stored in an org file you can easily edit the structure and keep notes.
+;; Note: it can also be used for organizing gnus config files (.gnus.el), or any other elisp config file.
 ;; 
 ;; This library allows you to load elisp code from an org file on emacs startup.
 ;; You can also limit the code that is loaded to certain tagged headers using an org tag match,
@@ -63,7 +64,7 @@
 ;; 
 ;; For faster loading you may prefer to keep your config code in a separate elisp file, and just update this file now and again
 ;; by exporting the code from the org file.
-;; Use the `org-dotemacs-load-file' command for this and specify a target file when prompted.
+;; Use the `org-dotemacs-load-file' command for this and specify a target elisp file when prompted.
 ;; 
 ;;; Structure of the org file 
 ;; 
@@ -437,7 +438,9 @@ argument which uses `org-dotemacs-error-handling' for its default value."
   "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
 If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
 not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
- (the function will halt with an error in those cases).
+ (the function will halt with an error in those cases). If TARGET-FILE is newer than FILE then
+TARGET-FILE will be loaded and FILE will not be processed. Otherwise TARGET-FILE will be overwritten
+by the code blocks in FILE.
 The optional argument ERROR-HANDLING determines how errors are handled and takes default value
 `org-dotemacs-error-handling' (which see)."
   (interactive (list nil
