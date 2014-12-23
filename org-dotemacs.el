@@ -168,7 +168,7 @@
 ;; `org-dotemacs-load-file' function, e.g:
 ;; 
 ;; (load-file "~/.emacs.d/org-dotemacs.el")
-;; (org-dotemacs-load-file "~/.emacs.d/my_emacs_config.org" "<TAG-MATCH>")
+;; (org-dotemacs-load-file "<TAG-MATCH>" "~/.emacs.d/my_emacs_config.org")
 ;; 
 
 
