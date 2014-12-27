@@ -474,7 +474,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
             ;; prompting for a filename to save it in.
             (write-file (concat temporary-file-directory (buffer-name)))
             (org-dotemacs-load-blocks target-file error-handling)
-            (write-file (concat temporary-file-directory (buffer-name))))
+            (delete-file (concat temporary-file-directory (buffer-name))))
           (kill-buffer matchbuf))
         (unless visited-p
           (kill-buffer to-be-removed))))))
