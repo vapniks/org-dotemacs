@@ -250,37 +250,6 @@ See also `org-dotemacs-include-todo'."
   "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
 If non-nil the value of this variable will override the match argument to `org-dotemacs-load-file'.")
 
-;; This function was obtained from string-fns.el by Noah Friedman <friedman@splode.com>
-;;;###autoload
-(defun string-split (string &optional separator limit)
-  "Split STRING at occurences of SEPARATOR.  Return a list of substrings.
-Optional argument SEPARATOR can be any regexp, but anything matching the
- separator will never appear in any of the returned substrings.
- If not specified, SEPARATOR defaults to \"[ \\f\\t\\n\\r\\v]+\".
-If optional arg LIMIT is specified, split into no more than that many
- fields \(though it may split into fewer\)."
-  (or separator (setq separator "[ \f\t\n\r\v]+"))
-  (let ((string-list nil)
-        (len (length string))
-        (pos 0)
-        (splits 0)
-        str)
-    (save-match-data
-      (while (<= pos len)
-        (setq splits (1+ splits))
-        (cond ((and limit
-                    (>= splits limit))
-               (setq str (substring string pos))
-               (setq pos (1+ len)))
-              ((string-match separator string pos)
-               (setq str (substring string pos (match-beginning 0)))
-               (setq pos (match-end 0)))
-              (t
-               (setq str (substring string pos))
-               (setq pos (1+ len))))
-        (setq string-list (cons str string-list))))
-    (nreverse string-list)))
-
 ;;;###autoload
 (defun* org-dotemacs-extract-subtrees (match &optional
                                              (exclude-todo-state org-dotemacs-exclude-todo)
@@ -385,7 +354,7 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                   (blockname (or (funcall get-spec spec :name)
                                  subtreename
                                  (concat "block_" (number-to-string block-counter))))
-                  (blockdeps (remove "" (string-split (concat (funcall get-spec spec :depends)
+                  (blockdeps (remove "" (split-string (concat (funcall get-spec spec :depends)
                                                               " "
                                                               subtreedeps)
                                                       "[ ,\f\t\n\r\v]+"))))
