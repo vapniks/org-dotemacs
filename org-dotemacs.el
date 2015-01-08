@@ -81,7 +81,11 @@
 ;; 
 ;; Ideally you should have each code block under a separate org subtree, then you can use properties to
 ;; name the blocks and define dependencies, and tags and todo states to specify which blocks
-;; should be loaded (see below).
+;; should be loaded (see below). You can specify that certain blocks are loaded only when certain conditions hold
+;; by customizing `org-dotemacs-conditional-tags'. By default operating system tags (linux, windows, mac, hurd, freebsd,
+;; unix) are set to only load when the corresponding operating system is being used (as reported by the `system-type' variable).
+;; So for example, any blocks tagged with "linux" will only be loaded if `system-type' is eq to 'gnu/linux.
+;; These conditional tags are overridden by any tag-match supplied to the command line.
 ;; 
 ;; I prefer to keep all my code block subtrees under a single header, and use other headers for keeping notes,
 ;; defining buffer-wide properties, etc. This way I can get a nice column view of the code blocks
@@ -144,7 +148,8 @@
 ;;        emacs --error-handling retry --tag-match "settings-mouse"
 ;; 
 ;; Then only code blocks tagged "settings" but not "mouse" will be loaded, and org-dotemacs will try to reload any
-;; blocks that have errors.
+;; blocks that have errors. If no tag-match is specified on the command line then `org-dotemacs-conditional-tags'
+;; will be used to determine which blocks can be loaded by default.
 ;; 
 ;;;  Installation 
 ;; 
@@ -175,6 +180,7 @@
 
 ;;; Customize:
 ;;
+;; `org-dotemacs-conditional-tags' : A list of tags/regexps and corresponding conditions for loading blocks.
 ;; `org-dotemacs-default-file' : The default org file containing the code blocks to load when `org-dotemacs-load-file' is called.
 ;; `org-dotemacs-error-handling' : Indicates how errors should be handled by `org-dotemacs-load-blocks'.
 ;; `org-dotemacs-include-todo' : A regular expression matching TODO states to be included.
@@ -246,11 +252,99 @@ See also `org-dotemacs-include-todo'."
   :group 'org-dotemacs
   :type 'regexp)
 
+(defcustom org-dotemacs-conditional-tags '(("linux" . (eq system-type 'gnu/linux))
+                                           ("windows" . (member system-type '(ms-dos windows-nt cygwin)))
+                                           ("mac" . (eq system-type 'darwin))
+                                           ("hurd" . (eq system-type 'gnu))
+                                           ("freebsd" . (eq system-type 'gnu/kfreebsd))
+                                           ("unix" . (member system-type '(aix berkely-unix hpux irix usg-unix-v))))
+  "A list of tags/regexps and corresponding conditions for loading blocks.
+If a block has a tag matching a regexp in this list then it will only be loaded if the corresponding
+condition evaluates to non-nil. All other blocks are loaded as normal.
+This behaviour is overridden if a tag-match is supplied on the command line."
+  :group 'org-dotemacs
+  :type '(repeat (cons (string :tag "Tag/regexp:")
+                       (sexp :tag "Predicate expression:"))))
+
+(defcustom org-dotemacs-dependency-inheritance nil
+  "Whether dependency properties (:DEPENDS:) can be inherited or not.
+Allowing property inheritance can be more convenient, but also makes loading slower.
+If nil then don't inherit :DEPENDS: property values, if t then do, and if 'selective then use
+inheritance only if the setting in `org-use-property-inheritance' selects DEPENDS for inheritance"
+  :group 'org-dotemacs
+  :type '(choice (const nil) (const t) (const selective)))
+
 (defvar org-dotemacs-tag-match nil
   "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
-If non-nil the value of this variable will override the match argument to `org-dotemacs-load-file'.")
+This overrides the match argument to `org-dotemacs-load-file' and is set by the emacs command line
+argument '--tag-match'.")
+
+
+;; The following function was swiped from el-get-dependencies.el : https://github.com/dimitri/el-get/
+;; simple-call-tree-info: DONE
+;;;###autoload
+(unless (functionp 'topological-sort)
+  (defun* topological-sort (graph &key (test 'eql))
+    "Returns a list of packages to install in order.
+  Graph is an association list whose keys are objects and whose
+values are lists of objects on which the corresponding key depends.
+Test is used to compare elements, and should be a suitable test for
+hash-tables.  Topological-sort returns two values.  The first is a
+list of objects sorted toplogically.  The second is a boolean
+indicating whether all of the objects in the input graph are present
+in the topological ordering (i.e., the first value)."
+    (let* ((entries (make-hash-table :test test))
+           ;; avoid obsolete `flet' & backward-incompatible `cl-flet'
+           (entry (lambda (v)
+                    "Return the entry for vertex.  Each entry is a cons whose
+              car is the number of outstanding dependencies of vertex
+              and whose cdr is a list of dependants of vertex."
+                    (or (gethash v entries)
+                        (puthash v (cons 0 '()) entries)))))
+      ;; populate entries initially
+      (dolist (gvertex graph)
+        (destructuring-bind (vertex &rest dependencies) gvertex
+          (let ((ventry (funcall entry vertex)))
+            (dolist (dependency dependencies)
+              (let ((dentry (funcall entry dependency)))
+                (unless (funcall test dependency vertex)
+                  (incf (car ventry))
+                  (push vertex (cdr dentry))))))))
+      ;; L is the list of sorted elements, and S the set of vertices
+      ;; with no outstanding dependencies.
+      (let ((L '())
+            (S (loop for entry being each hash-value of entries
+                     using (hash-key vertex)
+                     when (zerop (car entry)) collect vertex)))
+        ;; Until there are no vertices with no outstanding dependencies,
+        ;; process vertices from S, adding them to L.
+        (do* () ((endp S))
+          (let* ((v (pop S)) (ventry (funcall entry v)))
+            (remhash v entries)
+            (dolist (dependant (cdr ventry) (push v L))
+              (when (zerop (decf (car (funcall entry dependant))))
+                (push dependant S)))))
+        ;; return (1) the list of sorted items, (2) whether all items
+        ;; were sorted, and (3) if there were unsorted vertices, the
+        ;; hash table mapping these vertices to their dependants
+        (let ((all-sorted-p (zerop (hash-table-count entries))))
+          (values (nreverse L)
+                  all-sorted-p
+                  (unless all-sorted-p
+                    entries)))))))
 
 ;;;###autoload
+;; simple-call-tree-info: DONE
+(defun org-dotemacs-default-match nil
+  "Returns the default tag match string based on items in `org-dotemacs-conditional-tags' (which see)."
+  (let ((str (loop for (regex . condition) in org-dotemacs-conditional-tags
+                   if (eval condition) concat (concat regex "\\|"))))
+    (if (not (equal str ""))
+        (concat "-{" (substring str 0 -2) "}"))))
+
+;; This can be removed when the new code using `org-babel-map-src-blocks' has been implemented
+;;;###autoload
+;; simple-call-tree-info: REMOVE  
 (defun* org-dotemacs-extract-subtrees (match &optional
                                              (exclude-todo-state org-dotemacs-exclude-todo)
                                              (include-todo-state org-dotemacs-include-todo))
@@ -286,20 +380,49 @@ the copied subtrees will be visited."
 			 (with-current-buffer buf 
 			   (goto-char (point-max))
 			   (yank)))))
+                   ;; Note: `todo-only' needs to be scoped in for `org-make-tags-matcher' to work
                    (cdr (org-make-tags-matcher match)) todo-only)
     (with-current-buffer buf (org-mode))
     (if (called-interactively-p 'any)
         (switch-to-buffer buf)
       buf)))
 
+
+;; (defun* org-dotemacs-load-blocks (file match &optional target-file
+;;                                        (error-handling org-dotemacs-error-handling))
+;;  (let* ((todo-only nil)
+;;         (matcher (cdr (org-make-tags-matcher match)))
+;;         (blocks nil)
+;;         evaluated-blocks unevaluated-blocks unmet-dependencies)
+;;    (org-babel-map-src-blocks file
+;;      (let* ((tags-list (org-get-tags-at))
+;;             (name (org-entry-get (point) "NAME" nil))
+;;             (depsmet (cl-subsetp blockdeps evaluated-blocks :test 'equal)))
+;;        (if (and (equal lang "emacs-lisp")
+;;                 (eval matcher)
+;;                 (cl-subsetp (org-entry-get (point) "DEPENDS" org-use-property-inheritance)
+;;                             evaluated-blocks :test 'equal))
+;;            (eval (read-from-string))
+;;            (add-to-list 'blocks body))))
+;;    blocks))
+    
+
+
+;; This should be rewritten to loop over the code blocks using `org-babel-map-src-blocks' storing them
+;; in some variable and then use `topological-sort' to load the block in the right order.
+;; It should also report any cycles in the dependency graph, and maybe work out missing dependencies
+;; if possible (i.e. blocks that don't load should be tried again after loading more blocks, and then
+;; these blocks can be reported as dependencies for the block that didn't load initially).
+;; Evaluated blocks should be kept in a global variable so that they don't have to be reloaded if we
+;; decide to load another dependent block at some later point in time (after startup).
 ;;;###autoload
-(defun* org-dotemacs-load-blocks (&optional target-file
-                                            (error-handling org-dotemacs-error-handling))
-  "Load the emacs-lisp code blocks in the current org-mode file.
+;; simple-call-tree-info: CHANGE  
+(defun* org-dotemacs-load-blocks (file match &optional target-file
+                                       (error-handling org-dotemacs-error-handling))
+  "Load the emacs-lisp code blocks in FILE matching tag MATCH.
 Save the blocks to TARGET-FILE if it is non-nil.
 See the definition of `org-dotemacs-error-handling' for an explanation of the ERROR-HANDLING
 argument which uses `org-dotemacs-error-handling' for its default value."
-  (run-hooks 'org-babel-pre-tangle-hook)
   (save-restriction
     (save-excursion
       (let* ((block-counter 1)
@@ -391,20 +514,18 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                        (if (= 1 (length unmet-dependencies)) " has" "s have")
                        (mapconcat (lambda (blk) (concat "   " (second blk)
                                                         " block depends on blocks: " (third blk)))
-                                  unmet-dependencies " ")))))
-      ;; run `org-babel-post-tangle-hook' in tangled file
-      (when (and org-babel-post-tangle-hook
-                 target-file
-                 (file-exists-p target-file))
-        (org-babel-with-temp-filebuffer target-file
-          (run-hooks 'org-babel-post-tangle-hook))))))
+                                  unmet-dependencies " "))))))))
 
 ;;;###autoload
+;; simple-call-tree-info: CHANGE  
 (defun* org-dotemacs-load-file (&optional match
                                           (file org-dotemacs-default-file)
                                           target-file
                                           (error-handling org-dotemacs-error-handling))
   "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
+Tag matches supplied at the command line get priority over those supplied by the MATCH argument,
+and if both of these are nil then `org-dotemacs-default-match' will be used to create a tag match.
+If you need to override the command line tag-match set `org-dotemacs-tag-match' to nil.
 If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
 not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
  (the function will halt with an error in those cases). If TARGET-FILE is newer than FILE then
@@ -433,11 +554,12 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
              (> (age file) (age target-file)))
         (load-file target-file)
       (let ((visited-p (get-file-buffer (expand-file-name file)))
+            (match (or match (org-dotemacs-default-match)))
             matchbuf to-be-removed)
         (save-window-excursion
           (find-file file)
-          (setq to-be-removed (current-buffer))
-          (setq matchbuf (org-dotemacs-extract-subtrees (or org-dotemacs-tag-match match)))
+          (setq to-be-removed (current-buffer)
+                matchbuf (org-dotemacs-extract-subtrees (or org-dotemacs-tag-match match)))
           (with-current-buffer matchbuf
             ;; Hack: write the buffer out first to prevent org-babel-pre-tangle-hook
             ;; prompting for a filename to save it in.
@@ -448,7 +570,9 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
         (unless visited-p
           (kill-buffer to-be-removed))))))
 
-(defun* org-dotemacs-load-default (&optional (match ""))
+;;;###autoload
+;; simple-call-tree-info: CHANGE  
+(defun* org-dotemacs-load-default (&optional match)
   "Load code from `org-dotemacs-default-file' matching tag MATCH.
 Unlike `org-dotemacs-load-file' the user is not prompted for the location of any files,
 and no code is saved."
