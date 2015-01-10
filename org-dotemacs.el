@@ -44,7 +44,7 @@
 ;; Keeping your emacs config in an org file makes it easier for you to keep your .emacs under control,
 ;; and avoid DotEmacsBankruptcy.
 ;; With your config code stored in an org file you can easily edit the structure and keep notes.
-;; Note: it can also be used for organizing gnus config files (.gnus.el), or any other elisp config file.
+;; Note: it can also be used for organizing other elisp config files such as .gnus.el and .ercrc.el.
 ;; 
 ;; This library allows you to load elisp code from an org file on emacs startup.
 ;; You can also limit the code that is loaded to certain tagged headers using an org tag match,
