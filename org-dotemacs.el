@@ -279,6 +279,8 @@ inheritance only if the setting in `org-use-property-inheritance' selects DEPEND
 This overrides the match argument to `org-dotemacs-load-file' and is set by the emacs command line
 argument '--tag-match'.")
 
+(defvar org-dotemacs-evaluated-blocks nil
+  "A list of names of blocks that have already been evaluated")
 
 ;; The following function was swiped from el-get-dependencies.el : https://github.com/dimitri/el-get/
 ;; simple-call-tree-info: DONE
