@@ -390,28 +390,29 @@ the copied subtrees will be visited."
       buf)))
 
 
-(defun* org-dotemacs-load-blocks (file match &optional target-file
-                                       (error-handling org-dotemacs-error-handling))
- (let* ((todo-only nil)
-        (matcher (cdr (org-make-tags-matcher match)))
-        (blocks nil)
-        unevaluated-blocks unmet-dependencies)
-   (org-babel-map-src-blocks file
-     (let* ((tags-list (org-get-tags-at))
-            (name (org-entry-get (point) "NAME" nil))
-            (depsmet (cl-subsetp blockdeps evaluated-blocks :test 'equal)))
-       (if (and (equal lang "emacs-lisp")
-                (eval matcher)
-                (cl-subsetp (org-entry-get (point) "DEPENDS" org-use-property-inheritance)
-                            evaluated-blocks :test 'equal))
-           (eval (read-from-string))
-           (add-to-list 'blocks body))))
-   blocks))
-    
+;; The code below could be used in the rewrite of `org-dotemacs-load-blocks'
+;; (defun* org-dotemacs-load-blocks (file match &optional target-file
+;;                                        (error-handling org-dotemacs-error-handling))
+;;  (let* ((todo-only nil)
+;;         (matcher (cdr (org-make-tags-matcher match)))
+;;         (blocks nil)
+;;         unevaluated-blocks unmet-dependencies)
+;;    (org-babel-map-src-blocks file
+;;      (let* ((tags-list (org-get-tags-at))
+;;             (name (org-entry-get (point) "NAME" nil))
+;;             (depsmet (cl-subsetp blockdeps evaluated-blocks :test 'equal)))
+;;        (if (and (equal lang "emacs-lisp")
+;;                 (eval matcher)
+;;                 (cl-subsetp (org-entry-get (point) "DEPENDS" org-use-property-inheritance)
+;;                             evaluated-blocks :test 'equal))
+;;            (eval (read-from-string))
+;;            (add-to-list 'blocks body))))
+;;    blocks))
 
 
 ;; This should be rewritten to loop over the code blocks using `org-babel-map-src-blocks' storing them
-;; in some variable and then use `topological-sort' to load the block in the right order.
+;; in some variable and then use `topological-sort' to load the block in the right order (see the code
+;; above).
 ;; It should also report any cycles in the dependency graph, and maybe work out missing dependencies
 ;; if possible (i.e. blocks that don't load should be tried again after loading more blocks, and then
 ;; these blocks can be reported as dependencies for the block that didn't load initially).
