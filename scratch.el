@@ -1,4 +1,85 @@
 
+;; test first `eval-buffer'   then use C-x C-e at the end of next line
+;; (insert "\n" (show-cycle '(block1 block2 block3 block4 block5 block1) ))
+
+;; if there is no error occur ,it would be like this :
+
+;;    --------------------------------------------
+;;    |                                          |
+;;    |                                          V
+;; block2 <-- block3 <-- block4 <-- block5 <-- block1
+
+;; then you can use [return] at the block name to jump the define of block
+;; for now ,it only as a test
+
+(defun mystr (&rest args)
+  "like `make-string' with more args "
+  (with-temp-buffer
+    (let ((i nil) )
+	(mapc
+	 (lambda (it)
+	   (cond
+	    ((numberp it)(setq i it))
+	    ((and (stringp it) (numberp i))
+	     (insert (make-string i (string-to-char it)))
+	     (setq i nil))
+	    ((stringp it ) (insert it))))
+	 args))
+    (buffer-string)))
+
+(defvar  cycle-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "\C-m"
+      (lambda ()
+	(interactive)
+	(let* ((file (get-text-property (point) 'file))
+	       (name (thing-at-point 'symbol))
+	       (buf (find-buffer-visiting file)))
+	  (if buf
+	      (switch-to-buffer buf)
+	    (find-file file)
+	    )
+	  (goto-char 1)
+	  ;;find the named block
+	  (progn
+	    (message "finding the position of named block: %s" name))
+	  )
+	))
+    map)
+  "you can use [return] jump to the block define position")
+
+(defun show-cycle (a-list &optional direct)
+  ""
+  (let* ((file "~/.test.org")
+	 (tail (cdr a-list))
+	(last-name (if (stringp (car (last tail)))
+		       (car (last tail))
+		     (symbol-name (car (last tail)))))
+	(first-name (if (stringp (car tail))
+		       (car tail)
+		     (symbol-name (cadr a-list))))	
+	(pre (/ (length first-name) 2))
+	(suf (/ (length last-name) 2)))
+    (with-temp-buffer
+      (let (list-str)
+	(setq list-str
+	      (mapconcat
+	       (lambda (item)
+		 (let ((name (if (stringp item)
+				 item
+			       (symbol-name item))))
+		   (propertize name 'file file 'local-map cycle-map)
+		   ))
+	       tail (if direct " --> " " <-- ")))
+	(print list-str)
+	(setq mid-len (- (length list-str) pre suf))
+	(insert (mystr  pre " " mid-len "-" "\n")
+		(mystr  pre " " "|" (- mid-len 2) " " "|" "\n")
+		(mystr  pre " " (if direct "V" "|") (- mid-len 2) " "
+			(if direct "|" "V") "\n"))
+	(insert list-str "\n")
+	(buffer-string)))))
+  
 ;; test
 
 ;;(topological-sort '((a .(b  d))(b . (c))(c . (a)) (d . (c))))
@@ -87,7 +168,7 @@ otherwise do nothing")
 
 ;;(topological-sort '((a .(b  d))(b . (c))(c . (a)) (d . (c))))
 ;;(setq chong-debug-p nil)
-  
+
 
   (defun* topological-sort (graph &key (test 'eql))
     "Returns a list of packages to install in order.
