@@ -5,9 +5,11 @@ indicating names of blocks that should be loaded before that block.
 Some blocks have tags which can be used in a tag match to select which blocks to load.
 
 You can load all elisp block in this file like this: 
-  (org-dotemacs-load-file nil "dotemacs-test.org")
+  
+(let ((org-dotemacs-error-handling 'retry))
+(org-dotemacs-load-file nil "dotemacs-test.org"))
 
-To load just the tagged blocks use: (org-dotemacs-load-file "dotemacs-test.org")
+To load just the tagged blocks use: (org-dotemacs-load-file "tag1" "dotemacs-test.org")
 
 Note: you may need to change the path to the files.
 * Buffer-wide TODO states
@@ -17,18 +19,22 @@ You need a line like the following one somewhere in the file to be able to mark 
 
 You can customize the variables `org-dotemacs-exclude-todo' and `org-dotemacs-include-todo' 
 to indicate the effects of these TODO states.
+
 * Block 1
    :PROPERTIES:
    :NAME:     block_1
+   :DEPENDS:  block_5 
    :END:
 Here is the first block.
 
 #+BEGIN_SRC emacs-lisp
 (message "block 1")
 #+END_SRC
+
 * Block 2                                                              :tag1:
    :PROPERTIES:
    :NAME:     block_2
+   :DEPENDS:  block_1 
    :END:
 Here is the second block, it contains a subheading with another code block in it.
 #+BEGIN_SRC emacs-lisp
@@ -37,11 +43,12 @@ Here is the second block, it contains a subheading with another code block in it
 ** Block 2a
    :PROPERTIES:
    :NAME:     block_2a
-   :DEPENDS:  block_2
+   :DEPENDS:  block_2 block_1
    :END:
 #+BEGIN_SRC emacs-lisp
 (message "block 2a")
 #+END_SRC
+
 * Block 3
    :PROPERTIES:
    :NAME:     block_3
@@ -51,10 +58,12 @@ This block depends on blocks 1 and 2 (including 2a).
 #+BEGIN_SRC emacs-lisp
 (message "block 3")
 #+END_SRC
+
 * Block 4
    :PROPERTIES:
    :NAME:     block_4
    :DEPENDS:  block_3
+   :DEPENDS:  block_5
    :END:
 #+BEGIN_SRC emacs-lisp
 (message "block 4")
