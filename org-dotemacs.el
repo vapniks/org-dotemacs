@@ -213,17 +213,13 @@
 (eval-when-compile (require 'cl))
 (require 'org)
 
-;; 以后应该用某种方式包围起来 比如说用if 或是 eval-when
 
-(defvar chong-debug-p t
-  "when set it to `t' ,it will print some debug info
-otherwise do nothing")
-
-(defmacro chong-debug (&rest body)
-  `(if chong-debug-p
-       (progn
-	 ,@body)
-     nil))
+(defmacro chong-debug (&rest args)
+  ""
+  (let ((header (car args)))
+    (if header
+      `(progn ,@args))
+    ))
 
 (defalias 'cl-flet 'flet)
 
@@ -325,68 +321,144 @@ argument '--tag-match'.")
 (defvar org-dotemacs-evaluated-blocks nil
   "A list of names of blocks that have already been evaluated")
 
+
+;; test   Use C-x C-e at the end of next line
+;; (insert "\n" (show-cycle '(block1 block2 block3 block4 block5 block1) ))
+
+;; if there is no error occur ,it would be like this :
+
+;;    --------------------------------------------
+;;    |                                          |
+;;    |                                          V
+;; block2 <-- block3 <-- block4 <-- block5 <-- block1
+
+;; then you can use [return] at the block name to jump the define of block
+;; for now ,it only as a test
+
+(defun mystr (&rest args)
+  "like `make-string' with more args "
+  (with-temp-buffer
+    (let ((i nil) )
+	(mapc
+	 (lambda (it)
+	   (cond
+	    ((numberp it)(setq i it))
+	    ((and (stringp it) (numberp i))
+	     (insert (make-string i (string-to-char it)))
+	     (setq i nil))
+	    ((stringp it ) (insert it))))
+	 args))
+    (buffer-string)))
+
+(defvar  cycle-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "\C-m"
+      (lambda ()
+	(interactive)
+	(let* ((file (get-text-property (point) 'file))
+	       (name (thing-at-point 'symbol))
+	       (buf (find-buffer-visiting file)))
+	  (if buf
+	      (switch-to-buffer buf)
+	    (find-file file)
+	    )
+	  (goto-char 1)
+	  ;;find the named block
+	  (progn
+	    (message "finding the position of named block: %s" name))
+	  )
+	))
+    map)
+  "you can use [return] jump to the block define position")
+
+(defun show-cycle (a-list &optional direct)
+  ""
+  (let* ((file "~/.test.org")
+	 (tail (cdr a-list))
+	(last-name (if (stringp (car (last tail)))
+		       (car (last tail))
+		     (symbol-name (car (last tail)))))
+	(first-name (if (stringp (car tail))
+		       (car tail)
+		     (symbol-name (cadr a-list))))	
+	(pre (/ (length first-name) 2))
+	(suf (/ (length last-name) 2)))
+    (with-temp-buffer
+      (let (list-str)
+	(setq list-str
+	      (mapconcat
+	       (lambda (item)
+		 (let ((name (if (stringp item)
+				 item
+			       (symbol-name item))))
+		   (propertize name 'file file 'local-map cycle-map)
+		   ))
+	       tail (if direct " --> " " <-- ")))
+	(print list-str)
+	(setq mid-len (- (length list-str) pre suf))
+	(insert (mystr  pre " " mid-len "-" "\n")
+		(mystr  pre " " "|" (- mid-len 2) " " "|" "\n")
+		(mystr  pre " " (if direct "V" "|") (- mid-len 2) " "
+			(if direct "|" "V") "\n"))
+	(insert list-str "\n")
+	(buffer-string)))))
+  
+;; test
+;;(topological-sort '((a .(b  d))(b . (c))(c . (a)) (d . (c))))
+;;(topological-sort '((a  b  d)(b c)(c d) (d  )))
+;;(topological-sort org-dot-emacs-graph)
+
 (defun dependecy-view (hash-table-graph)
   "用一个用户友好的方式显示元素之间的依赖关系
 用不用首先排序一下呢？ 先不想那么复杂了吧"
-  (let (dep-list  cur cur-be-deps)
-    ;; set `cur' with one of hash-table keys
-    (let ((max 0) (finish nil) root be-deps)
+  (let ((finish nil) root dep-list  cur cur-be-deps ret)
+    (let ((max 0)  be-deps)
       (maphash
        (lambda (k v)
-	 (setq be-deps (cdr v))		;得到被依赖 找最大被依赖
-	 (setcar v 1)			;将他用来做回溯点
+	 (setq be-deps (cdr v))
+	 (setcar v 1)
 	 (when (> (length be-deps) max)
-	   (setq cur k			;得到最大被依赖 并用他做起点
-		 max (length be-deps)))
-	 )
+	   (setq cur k
+		 max (length be-deps))))
        hash-table-graph)
-      (chong-debug
+      (chong-debug nil
        (message "the `cur' is: %s  and items be depent are" cur )
        (print (gethash cur hash-table-graph))))
-    (setq root cur)			;设置指针
-    (push cur dep-list)			;得到被依赖
+    (setq root cur)  (push cur dep-list)
     (setq cur-be-deps (gethash cur hash-table-graph))
-    (setq cur (nth (car cur-be-deps) cur-be-deps)) ;得到首依赖
+    (setq cur (nth (car cur-be-deps) cur-be-deps))
     (when (equal (length (cdr cur-be-deps)) 0)
-      (error "the graphy no dependecy")) ;用指针指向下一个单元
+      (error "the graphy no dependecy")) 
     (setcar cur-be-deps (1+ (car cur-be-deps)))
-    ;; 关键的是我该如何的回溯
-    (while (and (not finish) (not (member cur dep-list)))
-      (push cur dep-list)
-      (chong-debug
-       (message "pushed %s" cur)
-       (print dep-list))
+    (setq finish nil)
+    (while (not finish) 
+      (when (null cur) (error "pushed nil")) ;; 当有错误的时候 就停止打印
+      (push cur dep-list)  ;; 可以省略他的  在以后的时候才push
+      (chong-debug nil (message "pushed %s" cur) (print dep-list))
       (setq cur-be-deps (gethash cur hash-table-graph))
       (if (equal 0 (length (cdr cur-be-deps))) ; 说明他已经遇到了空尾 应该回溯了
 	(progn
-	  (pop dep-list) (pop dep-list)			; 遇到了空尾的时候就弹出自己 并将先前的也弹出
-	)
+	  (pop dep-list) ; 遇到了空尾的时候就弹出自己 并将先前的也弹出 那cur是谁呢？
+	  (setq cur (pop dep-list)))
 	(setq cur (nth (car cur-be-deps) cur-be-deps)) ;正常的时候是得到被依赖 并继续
 	(if (not (null cur))			       ;如果能够继续的找到下一个节点 就改变指针
 	    (setcar cur-be-deps (1+ (car cur-be-deps)))
-	  ;; 如果他没有下一个节点可供查询了怎么办 回溯啊
-	  ;; 一般的时候 会回溯 但是 要是first也要回溯的话 就说明完结了
-	  (if (equal first cur)
+	  (if (equal root (car dep-list)) ;; 当root得到的也是nil的时候
 	      (setq finish t)
-	    (pop dep-list)		; 首先将我弹出
-	    (setcar cur-be-deps 1)	; 然后将我的指针变成 0
-	    (pop dep-list)		; 将我的前任也弹出  会继续处理我的前任的
-	    ))))
-    (if (or finish (null dep-list))	; finish的时候 应该会有root在list中
-      (progn
-	("no dependency be found in grphy of :")
-	(print hash-table-graph))
-      (message "dump item is :%s" cur)
-      (print dep-list)
-      )
-    )
-  )
+	    (pop dep-list) (setcar cur-be-deps 1)	; 然后将我的指针变成 0
+	    (setq cur (pop dep-list))		; 将我的前任也弹出  会继续处理我的前任的
+	    )))
+      ;;(chong-debug (message "befor judge ： cur %s  dep-list:" cur) (print dep-list))
+      (when (member cur dep-list)	;当出现重复的时候 就应该
+	(push  (cons cur dep-list) ret)
+	(setq cur (nth (car cur-be-deps) cur-be-deps))
+	(setcar cur-be-deps (1+ (car cur-be-deps))) ;设置下一个节点
+	(while (and cur (member cur dep-list))
+	    (push (cons cur dep-list) ret))
+	(when (null cur) (setq cur (pop dep-list))))
+      ) ret))
 
-  ;;(topological-sort '((a .(b  d))(b . (c))(c . (a)) (d . nil)))
-
-  
-;;(dependecy-view '((a . (0 (b c)))))
-  
+;;(topological-sort '((a .(b  d))(b . (c))(c . (a)) (d . (c))))
 
 ;; The following function was swiped from el-get-dependencies.el : https://github.com/dimitri/el-get/
 ;; simple-call-tree-info: DONE
@@ -418,7 +490,7 @@ in the topological ordering (i.e., the first value)."
                 (unless (funcall test dependency vertex)
                   (incf (car ventry))
                   (push vertex (cdr dentry))))))))
-      (chong-debug
+      (chong-debug nil
        (message "the new graphy generated by topological-sort :")
        (print entries)
        )
@@ -436,28 +508,16 @@ in the topological ordering (i.e., the first value)."
             (dolist (dependant (cdr ventry) (push v L))
               (when (zerop (decf (car (funcall entry dependant))))
                 (push dependant S)))))
-	(chong-debug
+	(chong-debug nil
 	 (message "new graphy after deleted zero dependecy :")
 	 (print entries))
         ;; return (1) the list of sorted items, (2) whether all items
         ;; were sorted, and (3) if there were unsorted vertices, the
         ;; hash table mapping these vertices to their dependants
         (let ((all-sorted-p (zerop (hash-table-count entries))))
-	  ;; debug
-	  (chong-debug
-	   (unless all-sorted-p
-	    (message "new graphy with ummete dependency :")
-	    (print entries)
-	    (dependecy-view entries)
-	    ))
           (values (nreverse L)   all-sorted-p
-                  (unless all-sorted-p entries))))))
-  )
-
-;(generator-dependece '((a .(b  d))(b . (c))(c . (a)) (d . nil)))
-
-;;(topological-sort '((a .(b  d))(b . (c))(c . (a)) (d . nil)))
-
+                  (unless all-sorted-p (dependecy-view entries)))))))
+)
 
 ;;;###autoload
 ;; simple-call-tree-info: DONE
@@ -513,13 +573,6 @@ the copied subtrees will be visited."
         (switch-to-buffer buf)
       buf)))
 
-
-(defmacro chong-debug (&rest args)
-  ""
-  (let ((header (car args)))
-    (if header
-      `(progn ,@args))
-    ))
 
 (defvar org-dot-emacs-new-name 0
   "")
@@ -631,15 +684,102 @@ and the value is body as in `org-babel-map-src-blocks'")
 	     (t (org-update-graphy name deps body))	; 当他被别人间接依赖的时候
 	    )
        ))
-   (chong-debug
+   (chong-debug  ;; main 首先是符合条件的名字集合 然后是所有依赖的集合（仅仅是名字）
     (message "org-dot-emacs-main-graph is")(print org-dot-emacs-main-graph))
    (org-dot-emacs-main-graph ) ;; update the main-graphy
    (chong-debug
     (message "org-dot-emacs-main-graph updated is :")(print org-dot-emacs-main-graph))
-   (dolist (name org-dot-emacs-main-graph)
+   (dolist (name org-dot-emacs-main-graph) ; subset 是图（根据main中所有的名字而得到的）
      (add-to-list 'org-dot-emacs-graph-subset (assoc name org-dot-emacs-graph)))
    (setq org-dot-emacs-main-graph (topological-sort org-dot-emacs-graph-subset :test 'equal))
+   (org-dot-emacs-load org-dot-emacs-main-graph)
    ))
+
+
+(defun org-dot-emacs-load-undeps (undeps-list &optional report-error)
+  ""
+  (let (error-blocks fail)
+    (dolist (block-name undeps-list)
+      (setq fail (try-eval-1 block-name))
+      (when fail
+	;; errored will be the errored blocks
+	(push block-name  error-blocks)
+	(if report-error
+	    (message "block %s load error with : %s" block-name fail))
+	))
+    error-blocks))
+
+(defun org-dot-emacs-load (main-graph)
+  "load th blocks in `org-dot-emacs-main-graph',return by `topological-sort'"
+  (let ((undeps (car main-graph))
+	(deps (nth 2 main-graph))
+	undep-error fail new-deps error-item dep
+	(count 0))
+    (setq undep-error (org-dot-emacs-load-undeps undeps))
+    (while (and (< count 5) deps)
+      (while  deps  ;; dep 本身就是一个list
+	(setq dep (pop deps))
+	(setq error-item nil)
+	(dolist (dep-item dep)
+	  (setq fail (try-eval-1 dep-item))
+	  (when fail
+	    (push  dep-item error-item))
+	  )
+	(when error-item
+	  (push error-item new-deps)))
+      (setq deps new-deps)(setq new-deps nil)
+      (setq count (1+ count))
+      )
+    (chong-debug nil (message "undep errors")(print undep-error))
+    (org-dot-emacs-load-undeps undep-error 'report) ;装载两次
+    (dolist (dep deps)
+      (org-dot-emacs-load-undeps dep 'report) ;这个时候 只能用出错的方式做提醒了
+      )
+    ))
+;;(org-dotemacs-load-blocks-1 "dotemacs-test.org" "tag1")
+
+(defvar evaluated-blocks nil
+  "the global variable of evaluted blocks")
+
+;; (print (try-eval-1 "block_1"))  ;; 现在已经可以load一个块了 接下来就是装载所有的块
+
+(defun try-eval-1 (blockname)
+  "load the code named blockname.
+no dependant should be handle,only the block itself"
+  (let* (fail
+	 (code-str (gethash blockname org-dot-emacs-blocks))
+	 )
+    (if (member blockname evaluated-blocks)
+	(progn
+	  (message "the block named %s has be loaded." blockname)
+	  nil
+	  )
+	(with-temp-buffer
+	  (ignore-errors (emacs-lisp-mode))
+	  (insert code-str)
+	  (message "org-dotemacs: Evaluating %s code-block" blockname)
+	  (setq fail nil)
+	  (condition-case err
+	      (eval-buffer)
+	    (error
+	     (setq fail (error-message-string err))
+	     (message "org-dotemacs: Error in %s code block: %s"
+		      blockname fail))))
+	  (unless fail
+	    (setq evaluated-blocks (append evaluated-blocks (list blockname))))
+	  fail)))
+
+(when target-file
+	      ;; save source-block to file
+	      (let ((content (buffer-string)))
+		(with-temp-buffer
+		  (if (file-exists-p target-file)
+		      (insert-file-contents target-file))
+		  (goto-char (point-max))
+		  (insert content)
+		  (write-region nil nil target-file))))
+
+
 
 
 ;; This should be rewritten to loop over the code blocks using `org-babel-map-src-blocks' storing them
@@ -836,7 +976,7 @@ and no code is saved."
 (message "org-dotemacs: error-handling = %s" (concat "'" (symbol-name org-dotemacs-error-handling)))
 (message "org-dotemacs: tag-match = %s" org-dotemacs-tag-match)
 
-(provide 'org-dotemacs)
+(provide 'org-dotemacs)			;(buffer-size)
 
 ;; (magit-push)
 ;; (yaoddmuse-post "EmacsWiki" "org-dotemacs.el" (buffer-name) (buffer-string) "update")
