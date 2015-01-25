@@ -1,4 +1,4 @@
-;;; org-dotemacs.el --- Store your emacs config as an org file, and choose which bits to load.
+;; org-dotemacs.el --- Store your emacs config as an org file, and choose which bits to load.
 
 ;; Filename: org-dotemacs.el
 ;; Description: Store your emacs config as an org file, and load code snippets based on tag matches.
@@ -213,10 +213,49 @@
 (eval-when-compile (require 'cl))
 (require 'org)
 
+
+(defmacro chong-debug (&rest args)
+  ""
+  (let ((header (car args)))
+    (if header
+      `(progn ,@args))
+    ))
+
+(defalias 'cl-flet 'flet)
+
+(defun cl-position-if (cl-pred cl-list &rest cl-keys)
+  (apply 'position nil cl-list :if cl-pred cl-keys))
+
+(defun cl-position-if-not (cl-pred cl-list &rest cl-keys)
+  (apply 'position nil cl-list :if-not cl-pred cl-keys))
+
+
+(defun cl-member (cl-item cl-list &rest cl-keys)
+  (declare (compiler-macro cl--compiler-macro-member))
+  (if cl-keys
+      (cl-parsing-keywords (:test :test-not :key :if :if-not) ()
+	(while (and cl-list (not (cl-check-test cl-item (car cl-list))))
+	  (setq cl-list (cdr cl-list)))
+	cl-list)
+    (if (and (numberp cl-item) (not (integerp cl-item)))
+	(member cl-item cl-list)
+      (memq cl-item cl-list))))
+
+(defun cl-subsetp (cl-list1 cl-list2 &rest cl-keys)
+      (cond ((null cl-list1) t) ((null cl-list2) nil)
+	    ((equal cl-list1 cl-list2) t)
+	    (t (cl-parsing-keywords
+		(:key)
+		(:test :test-not)
+		(while (and cl-list1
+			    (apply 'cl-member (cl-check-key (car cl-list1))
+				   cl-list2 cl-keys))
+		  (pop cl-list1))
+		(null cl-list1)))))
+
 ;;; Code:
 
-
-
+;; M-x customize-group RET org-dotemacs RET  原来是这么使用 group 的
 (defgroup org-dotemacs nil
   "Store your emacs config as an org file, and choose which bits to load."
   :group 'org)
@@ -266,13 +305,14 @@ This behaviour is overridden if a tag-match is supplied on the command line."
   :type '(repeat (cons (string :tag "Tag/regexp:")
                        (sexp :tag "Predicate expression:"))))
 
-(defcustom org-dotemacs-dependency-inheritance nil
-  "Whether dependency properties (:DEPENDS:) can be inherited or not.
-Allowing property inheritance can be more convenient, but also makes loading slower.
-If nil then don't inherit :DEPENDS: property values, if t then do, and if 'selective then use
-inheritance only if the setting in `org-use-property-inheritance' selects DEPENDS for inheritance"
-  :group 'org-dotemacs
-  :type '(choice (const nil) (const t) (const selective)))
+;;;###autoload
+;; simple-call-tree-info: DONE
+(defun org-dotemacs-default-match nil
+  "Returns the default tag match string based on items in `org-dotemacs-conditional-tags' (which see)."
+  (let ((str (loop for (regex . condition) in org-dotemacs-conditional-tags
+                   if (eval condition) concat (concat regex "\\|"))))
+    (if (not (equal str ""))
+        (concat "-{" (substring str 0 -2) "}"))))
 
 (defvar org-dotemacs-tag-match nil
   "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
@@ -281,6 +321,115 @@ argument '--tag-match'.")
 
 (defvar org-dotemacs-evaluated-blocks nil
   "A list of names of blocks that have already been evaluated")
+
+;;;; main interactive
+
+;;;###autoload
+;; simple-call-tree-info: CHANGE  
+(defun* org-dotemacs-load-file (&optional match
+                                          (file org-dotemacs-default-file)
+                                          target-file
+                                          (error-handling org-dotemacs-error-handling))
+  "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
+Tag matches supplied at the command line get priority over those supplied by the MATCH argument,
+and if both of these are nil then `org-dotemacs-default-match' will be used to create a tag match.
+If you need to override the command line tag-match set `org-dotemacs-tag-match' to nil.
+If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
+not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
+ (the function will halt with an error in those cases). If TARGET-FILE is newer than FILE then
+TARGET-FILE will be loaded and FILE will not be processed. Otherwise TARGET-FILE will be overwritten
+by the code blocks in FILE.
+The optional argument ERROR-HANDLING determines how errors are handled and takes default value
+`org-dotemacs-error-handling' (which see)."
+  (interactive (list nil
+                     (read-file-name (format "File to load (default %s): " org-dotemacs-default-file)
+                                     (file-name-directory org-dotemacs-default-file)
+                                     org-dotemacs-default-file
+                                     t nil
+                                     (lambda (file)
+                                       (string-match "\\.org$" file)))
+                     (if (y-or-n-p "Save elisp code to separate file?")
+                         (read-file-name "Save to file: " user-emacs-directory))))
+  (if (and target-file (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file))
+      (error "org-dotemacs: Refuse to overwrite %s" target-file))
+  ;;(require 'ob-core)
+  (require 'ob)
+  (cl-flet ((age (file) (float-time
+                         (time-subtract (current-time)
+                                        (nth 5 (or (file-attributes (file-truename file))
+                                                   (file-attributes file)))))))
+    (if (and target-file
+             (file-exists-p target-file)
+             (> (age file) (age target-file)))
+        (load-file target-file)
+      (org-dotemacs-load-blocks-1 file  match target-file)
+      )))
+
+(defvar org-dot-emacs-new-name 0  "")
+
+(defun org-dot-emacs-new-name ()
+  ""
+  (let ((temp "*org-dot-emacs*-"))
+    (setq org-dot-emacs-new-name (1+ org-dot-emacs-new-name))
+    (concat temp org-dot-emacs-new-name)
+    ))
+;;(org-dotemacs-load-blocks-1 "dotemacs-test.org" "tag1")
+(defun* org-dotemacs-load-blocks-1 (file match &optional target-file
+                                       (error-handling org-dotemacs-error-handling))
+ (let* ((todo-only nil)
+        (matcher (cdr (org-make-tags-matcher match))) ; 判定
+        (blocks nil)
+        unevaluated-blocks unmet-dependencies)
+   (org-update-init)
+   (org-babel-map-src-blocks file
+     (let* ((tags-list (org-get-tags-at))	      ; tag有什么用吗？
+            (name (org-entry-get (point) "NAME" nil)) ;subsetp 的意思是 是否是子集
+	    (deps (org-entry-get (point) "DEPENDS" org-use-property-inheritance)) ; 是不是所有的依赖都满足了
+	    (dep-blocks nil))		; 用他赖存储所有被依赖的其他block 如果不符合也没有关系
+       (when deps			; 在他有依赖的时候就得到依赖
+	 (setq deps (split-string deps "[ \s\t]+" t)))
+       (unless name (setq name (org-dot-emacs-new-name)))
+       (unless body (setq body ""))
+       (cond ((and (equal lang "emacs-lisp")
+                (eval matcher))		; 直接依赖
+	      (org-update-graphy name deps body)
+	      (add-to-list 'org-dot-emacs-main-graph name))
+	     (t (org-update-graphy name deps body))	; 当他被别人间接依赖的时候
+	    )
+       ))
+   (chong-debug  ;; main 首先是符合条件的名字集合 然后是所有依赖的集合（仅仅是名字）
+    (message "org-dot-emacs-main-graph is")(print org-dot-emacs-main-graph))
+   (org-dot-emacs-main-graph ) ;; update the main-graphy
+   (chong-debug
+    (message "org-dot-emacs-main-graph updated is :")(print org-dot-emacs-main-graph))
+   (dolist (name org-dot-emacs-main-graph) ; subset 是图（根据main中所有的名字而得到的）
+     (add-to-list 'org-dot-emacs-graph-subset (assoc name org-dot-emacs-graph)))
+   (setq org-dot-emacs-main-graph (topological-sort org-dot-emacs-graph-subset :test 'equal))
+   (org-dot-emacs-load org-dot-emacs-main-graph)
+   (if target-file
+       (org-dot-emacs-write-file target-file)
+     (message "org-dot-emacs has loaded %s" file)
+     )
+   ))
+
+(defun org-dot-emacs-tag-file (file-name tags)
+  (let ()
+    (concat file-name))
+  )
+
+(defun org-dot-emacs-write-file (file-name)
+  "write to the file of file-name"
+  (let (block-body)
+    (with-temp-buffer
+      (mapc
+       (lambda (block-name)
+	 (setq block-body (gethash block-name org-dot-emacs-blocks))
+	 (insert "\n" body "\n")
+	 )
+       (reverse evaluated-blocks))
+      (write-file filename))))
+
+;;;; graph relatived
 
 ;; The following function was swiped from el-get-dependencies.el : https://github.com/dimitri/el-get/
 ;; simple-call-tree-info: DONE
@@ -312,6 +461,10 @@ in the topological ordering (i.e., the first value)."
                 (unless (funcall test dependency vertex)
                   (incf (car ventry))
                   (push vertex (cdr dentry))))))))
+      (chong-debug nil
+       (message "the new graphy generated by topological-sort :")
+       (print entries)
+       )
       ;; L is the list of sorted elements, and S the set of vertices
       ;; with no outstanding dependencies.
       (let ((L '())
@@ -326,252 +479,265 @@ in the topological ordering (i.e., the first value)."
             (dolist (dependant (cdr ventry) (push v L))
               (when (zerop (decf (car (funcall entry dependant))))
                 (push dependant S)))))
+	(chong-debug nil
+	 (message "new graphy after deleted zero dependecy :")
+	 (print entries))
         ;; return (1) the list of sorted items, (2) whether all items
         ;; were sorted, and (3) if there were unsorted vertices, the
         ;; hash table mapping these vertices to their dependants
         (let ((all-sorted-p (zerop (hash-table-count entries))))
-          (values (nreverse L)
-                  all-sorted-p
-                  (unless all-sorted-p
-                    entries)))))))
+          (values (nreverse L)   all-sorted-p
+                  (unless all-sorted-p (dependecy-view entries)))))))
+)
 
-;;;###autoload
-;; simple-call-tree-info: DONE
-(defun org-dotemacs-default-match nil
-  "Returns the default tag match string based on items in `org-dotemacs-conditional-tags' (which see)."
-  (let ((str (loop for (regex . condition) in org-dotemacs-conditional-tags
-                   if (eval condition) concat (concat regex "\\|"))))
-    (if (not (equal str ""))
-        (concat "-{" (substring str 0 -2) "}"))))
-
-;; This can be removed when the new code using `org-babel-map-src-blocks' has been implemented
-;;;###autoload
-;; simple-call-tree-info: REMOVE  
-(defun* org-dotemacs-extract-subtrees (match &optional
-                                             (exclude-todo-state org-dotemacs-exclude-todo)
-                                             (include-todo-state org-dotemacs-include-todo))
-  "Extract subtrees in current org-mode buffer that match tag MATCH.
-MATCH should be a tag match as detailed in the org manual.
-If EXCLUDE-TODO-STATE is non-nil then subtrees with todo states matching this regexp will be
-excluding, and if INCLUDE-TODO-STATE is non-nil then only subtrees with todo states matching
-this regexp will be included.
-The copied subtrees will be placed in a new buffer which is returned by this function.
-If called interactively MATCH is prompted from the user, and the new buffer containing
-the copied subtrees will be visited."
-  (interactive '(nil))
-  (let ((buf (generate-new-buffer (buffer-name)))
-        todo-only copied-areas)
-    (org-scan-tags (lambda nil
-		     (let ((todo-state (org-get-todo-state)))
-		       (unless (or (and exclude-todo-state
-					todo-state
-					(string-match exclude-todo-state
-						      todo-state))
-				   (and include-todo-state
-					todo-state
-					(not (string-match include-todo-state
-							   todo-state)))
-                                   (loop for pair in copied-areas
-                                         if (and (>= (point) (car pair))
-                                                 (< (point) (cdr pair)))
-                                         return t))
-			 (let ((start (point)) end)
-			   (org-copy-subtree)
-			   (setq end (+ start (length (current-kill 0 t))))
-			   (push (cons start end) copied-areas))
-			 (with-current-buffer buf 
-			   (goto-char (point-max))
-			   (yank)))))
-                   ;; Note: `todo-only' needs to be scoped in for `org-make-tags-matcher' to work
-                   (cdr (org-make-tags-matcher match)) todo-only)
-    (with-current-buffer buf (org-mode))
-    (if (called-interactively-p 'any)
-        (switch-to-buffer buf)
-      buf)))
+(defun dependecy-view (hash-table-graph)
+  "用一个用户友好的方式显示元素之间的依赖关系
+用不用首先排序一下呢？ 先不想那么复杂了吧"
+  (let ((finish nil) root dep-list  cur cur-be-deps ret)
+    (let ((max 0)  be-deps)
+      (maphash
+       (lambda (k v)
+	 (setq be-deps (cdr v))
+	 (setcar v 1)
+	 (when (> (length be-deps) max)
+	   (setq cur k
+		 max (length be-deps))))
+       hash-table-graph)
+      (chong-debug nil
+       (message "the `cur' is: %s  and items be depent are" cur )
+       (print (gethash cur hash-table-graph))))
+    (setq root cur)  (push cur dep-list)
+    (setq cur-be-deps (gethash cur hash-table-graph))
+    (setq cur (nth (car cur-be-deps) cur-be-deps))
+    (when (equal (length (cdr cur-be-deps)) 0)
+      (error "the graphy no dependecy")) 
+    (setcar cur-be-deps (1+ (car cur-be-deps)))
+    (setq finish nil)
+    (while (not finish) 
+      (when (null cur) (error "pushed nil")) ;; 当有错误的时候 就停止打印
+      (push cur dep-list)  ;; 可以省略他的  在以后的时候才push
+      (chong-debug nil (message "pushed %s" cur) (print dep-list))
+      (setq cur-be-deps (gethash cur hash-table-graph))
+      (if (equal 0 (length (cdr cur-be-deps))) ; 说明他已经遇到了空尾 应该回溯了
+	(progn
+	  (pop dep-list) ; 遇到了空尾的时候就弹出自己 并将先前的也弹出 那cur是谁呢？
+	  (setq cur (pop dep-list)))
+	(setq cur (nth (car cur-be-deps) cur-be-deps)) ;正常的时候是得到被依赖 并继续
+	(if (not (null cur))			       ;如果能够继续的找到下一个节点 就改变指针
+	    (setcar cur-be-deps (1+ (car cur-be-deps)))
+	  (if (equal root (car dep-list)) ;; 当root得到的也是nil的时候
+	      (setq finish t)
+	    (pop dep-list) (setcar cur-be-deps 1)	; 然后将我的指针变成 0
+	    (setq cur (pop dep-list))		; 将我的前任也弹出  会继续处理我的前任的
+	    )))
+      ;;(chong-debug (message "befor judge ： cur %s  dep-list:" cur) (print dep-list))
+      (when (member cur dep-list)	;当出现重复的时候 就应该
+	(push  (cons cur dep-list) ret)
+	(setq cur (nth (car cur-be-deps) cur-be-deps))
+	(setcar cur-be-deps (1+ (car cur-be-deps))) ;设置下一个节点
+	(while (and cur (member cur dep-list))
+	    (push (cons cur dep-list) ret))
+	(when (null cur) (setq cur (pop dep-list))))
+      ) ret))
 
 
-;; The code below could be used in the rewrite of `org-dotemacs-load-blocks'
-;; (defun* org-dotemacs-load-blocks (file match &optional target-file
-;;                                        (error-handling org-dotemacs-error-handling))
-;;  (let* ((todo-only nil)
-;;         (matcher (cdr (org-make-tags-matcher match)))
-;;         (blocks nil)
-;;         unevaluated-blocks unmet-dependencies)
-;;    (org-babel-map-src-blocks file
-;;      (let* ((tags-list (org-get-tags-at))
-;;             (name (org-entry-get (point) "NAME" nil))
-;;             (depsmet (cl-subsetp blockdeps evaluated-blocks :test 'equal)))
-;;        (if (and (equal lang "emacs-lisp")
-;;                 (eval matcher)
-;;                 (cl-subsetp (org-entry-get (point) "DEPENDS" org-use-property-inheritance)
-;;                             evaluated-blocks :test 'equal))
-;;            (eval (read-from-string))
-;;            (add-to-list 'blocks body))))
-;;    blocks))
+(defun mystr (&rest args)
+  "like `make-string' with more args "
+  (with-temp-buffer
+    (let ((i nil) )
+	(mapc
+	 (lambda (it)
+	   (cond
+	    ((numberp it)(setq i it))
+	    ((and (stringp it) (numberp i))
+	     (insert (make-string i (string-to-char it)))
+	     (setq i nil))
+	    ((stringp it ) (insert it))))
+	 args))
+    (buffer-string)))
+
+(defvar  cycle-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "\C-m"
+      (lambda ()
+	(interactive)
+	(let* ((file (get-text-property (point) 'file))
+	       (name (thing-at-point 'symbol))
+	       (buf (find-buffer-visiting file)))
+	  (if buf
+	      (switch-to-buffer buf)
+	    (find-file file)
+	    )
+	  (goto-char 1)
+	  ;;find the named block
+	  (progn
+	    (message "finding the position of named block: %s" name))
+	  )
+	))
+    map)
+  "you can use [return] jump to the block define position")
+
+(defun show-cycle (a-list &optional direct)
+  ""
+  (let* ((file "~/.test.org")
+	 (tail (cdr a-list))
+	(last-name (if (stringp (car (last tail)))
+		       (car (last tail))
+		     (symbol-name (car (last tail)))))
+	(first-name (if (stringp (car tail))
+		       (car tail)
+		     (symbol-name (cadr a-list))))	
+	(pre (/ (length first-name) 2))
+	(suf (/ (length last-name) 2)))
+    (with-temp-buffer
+      (let (list-str)
+	(setq list-str
+	      (mapconcat
+	       (lambda (item)
+		 (let ((name (if (stringp item)
+				 item
+			       (symbol-name item))))
+		   (propertize name 'file file 'local-map cycle-map)
+		   ))
+	       tail (if direct " --> " " <-- ")))
+	(print list-str)
+	(setq mid-len (- (length list-str) pre suf))
+	(insert (mystr  pre " " mid-len "-" "\n")
+		(mystr  pre " " "|" (- mid-len 2) " " "|" "\n")
+		(mystr  pre " " (if direct "V" "|") (- mid-len 2) " "
+			(if direct "|" "V") "\n"))
+	(insert list-str "\n")
+	(buffer-string)))))
+  
+(defvar org-dot-emacs-graph nil
+  "an assocate list ,it's item is (name . (dependants..))
+will be filte to get `org-dot-emacs-graph-subset'")
+
+(defvar org-dot-emacs-graph-subset nil
+  "an assocate list ,as the argument of `topological-sort'")
+
+(defvar org-dot-emacs-main-graph nil
+  "alist ,all matched block will be there")
+
+(defvar org-dot-emacs-blocks (make-hash-table :test 'equal)
+  "a hashtable ,the key is the name of block,
+and the value is body as in `org-babel-map-src-blocks'")
+
+;;
+(defun org-update-init ()
+  "clear global variable"
+  (setq org-dot-emacs-graph nil)
+  (setq org-dot-emacs-graph-subset nil)
+  (setq org-dot-emacs-main-graph nil)
+  (setq org-dot-emacs-blocks (make-hash-table :test 'equal)))
+
+(defun org-update-graphy (name deps body)
+  "update global variable"
+  (let ((old-body (gethash name org-dot-emacs-blocks))
+	)
+    (if old-body
+	(error "The name %s has been defined above" name)
+      (setq org-dot-emacs-graph (cons (cons name  deps) org-dot-emacs-graph))
+      (puthash name body org-dot-emacs-blocks))
+    ))
+
+(defun org-dot-emacs-main-graph (&optional number)
+  "get all dependeced block-names"
+  (let ((tail (if (and number (numberp number))
+		  (nthcdr number org-dot-emacs-main-graph)
+		org-dot-emacs-main-graph))
+	ret deps
+	(count 0))
+    (chong-debug (message "in func main the tail is:")(print tail))
+    (dolist (it tail)
+      (setq deps (cdr (assoc it org-dot-emacs-graph)))
+      (chong-debug
+       (when (null deps)
+	 (message "the deps : %s --> nil" it)))
+      (dolist (dep deps)
+	(chong-debug
+	 (message "the deps : %s  --> %s" it dep))
+	(if (member dep org-dot-emacs-main-graph)
+	    nil
+	  (chong-debug (message "new item :%s" dep))
+	  (add-to-list 'org-dot-emacs-main-graph dep t) ;append to main-graphy
+	  (setq count (1+ count)))))
+    (when (> count 0)
+	(org-dot-emacs-main-graph
+	 (- (length org-dot-emacs-main-graph) count))
+	)))
+
+;;;;;     load blocks
+
+(defun org-dot-emacs-load (main-graph)
+  "load th blocks in `org-dot-emacs-main-graph',return by `topological-sort'"
+  (let ((undeps (car main-graph))
+	(deps (nth 2 main-graph))
+	undep-error fail new-deps error-item dep
+	(count 0))
+    (setq undep-error (org-dot-emacs-load-undeps undeps))
+    (while (and (< count 5) deps)
+      (while  deps  ;; dep 本身就是一个list
+	(setq dep (pop deps))
+	(setq error-item nil)
+	(dolist (dep-item dep)
+	  (setq fail (try-eval-1 dep-item))
+	  (when fail
+	    (push  dep-item error-item))
+	  )
+	(when error-item
+	  (push error-item new-deps)))
+      (setq deps new-deps)(setq new-deps nil)
+      (setq count (1+ count))
+      )
+    (chong-debug nil (message "undep errors")(print undep-error))
+    (org-dot-emacs-load-undeps undep-error 'report) ;装载两次
+    (dolist (dep deps)
+      (org-dot-emacs-load-undeps dep 'report) ;这个时候 只能用出错的方式做提醒了
+      )))
 
 
-;; This should be rewritten to loop over the code blocks using `org-babel-map-src-blocks' storing them
-;; in some variable and then use `topological-sort' to load the block in the right order (see the code
-;; above).
-;; It should also report any cycles in the dependency graph, and maybe work out missing dependencies
-;; if possible (i.e. blocks that don't load should be tried again after loading more blocks, and then
-;; these blocks can be reported as dependencies for the block that didn't load initially).
-;; Evaluated blocks should be kept in `org-dotemacs-evaluated-blocks' so that they don't have to be
-;; reloaded if we decide to load another dependent block at some later point in time (after startup).
-;;;###autoload
-;; simple-call-tree-info: CHANGE  
-(defun* org-dotemacs-load-blocks (file match &optional target-file
-                                       (error-handling org-dotemacs-error-handling))
-  "Load the emacs-lisp code blocks in FILE matching tag MATCH.
-Save the blocks to TARGET-FILE if it is non-nil.
-See the definition of `org-dotemacs-error-handling' for an explanation of the ERROR-HANDLING
-argument which uses `org-dotemacs-error-handling' for its default value."
-  (save-restriction
-    (save-excursion
-      (let* ((block-counter 1)
-             (org-babel-default-header-args
-              (org-babel-merge-params org-babel-default-header-args
-                                      (list (cons :tangle (or target-file "yes")))))
-             (specs (cdar (org-babel-tangle-collect-blocks 'emacs-lisp)))
-             (get-spec (lambda (spec name) (cdr (assoc name (nth 4 spec)))))
-             (try-eval (lambda (spec blockname blockdeps)
-                         (let (fail)
-                           (if (cl-subsetp blockdeps evaluated-blocks :test 'equal)
-                               (with-temp-buffer
-                                 (ignore-errors (emacs-lisp-mode))
-                                 (org-babel-spec-to-string spec)
-                                 ;; evaluate the code
-                                 (message "org-dotemacs: Evaluating %s code block" blockname)
-                                 (setq fail nil)
-                                 (if (member error-handling '(skip retry))
-                                     (condition-case err
-                                         (eval-buffer)
-                                       (error
-                                        (setq fail (error-message-string err))
-                                        (message "org-dotemacs: Error in %s code block: %s"
-                                                 blockname fail)))
-                                   (eval-buffer))
-                                 (unless fail
-                                   (setq evaluated-blocks (append evaluated-blocks (list blockname)))
-                                   ;; We avoid append-to-file as it does not work with tramp.
-                                   (when target-file
-                                     ;; save source-block to file
-                                     (let ((content (buffer-string)))
-                                       (with-temp-buffer
-                                         (if (file-exists-p target-file)
-                                             (insert-file-contents target-file))
-                                         (goto-char (point-max))
-                                         (insert content)
-                                         (write-region nil nil target-file)))))
-                                 fail) 'unmet))))
-             evaluated-blocks unevaluated-blocks unmet-dependencies)
-        ;; delete any old versions of file
-        (if (and target-file (file-exists-p target-file))
-            (delete-file target-file))
-        (mapc
-         (lambda (spec)
-           (let* ((linenum (car spec))
-                  (start (save-excursion
-                           (goto-char (point-min))
-                           (forward-line (1- linenum))
-                           (point)))
-                  (subtreedeps (org-entry-get start "DEPENDS" t))
-                  (subtreename (org-entry-get start "NAME" t))
-                  (blockname (or (funcall get-spec spec :name)
-                                 subtreename
-                                 (concat "block_" (number-to-string block-counter))))
-                  (blockdeps (remove "" (split-string (concat (funcall get-spec spec :depends)
-                                                              " "
-                                                              subtreedeps)
-                                                      "[ ,\f\t\n\r\v]+"))))
-             (let ((fail (funcall try-eval spec blockname blockdeps)))
-               (cond ((stringp fail)
-                      (setq unevaluated-blocks (append unevaluated-blocks (list (list spec blockname blockdeps fail)))))
-                     ((eq fail 'unmet)
-                      (setq unmet-dependencies (append unmet-dependencies (list (list spec blockname blockdeps)))))
-                     (t (if (eq error-handling 'retry)
-                            (while (and (not fail) (or unevaluated-blocks unmet-dependencies))
-                              (loop for blk in (append unevaluated-blocks unmet-dependencies)
-                                    do (setq fail (funcall try-eval (car blk) (second blk) (third blk)))
-                                    unless fail do (setq unevaluated-blocks (remove blk unevaluated-blocks)
-                                                         unmet-dependencies (remove blk unmet-dependencies))
-                                    and return t))))))
-             (setq block-counter (+ 1 block-counter))))
-         specs)
-        (if (and (not unevaluated-blocks) (not unmet-dependencies))
-            (message "\norg-dotemacs: All blocks evaluated successfully!")
-          (if evaluated-blocks
-              (message "\norg-dotemacs: Successfully evaluated the following %d code blocks: %s"
-                       (length evaluated-blocks)
-                       (mapconcat 'identity evaluated-blocks " ")))
-          (if unevaluated-blocks
-              (message "\norg-dotemacs: The following %d code block%s errors: \n %s\n"
-                       (length unevaluated-blocks)
-                       (if (= 1 (length unevaluated-blocks)) " has" "s have")
-                       (mapconcat (lambda (blk) (concat "   " (second blk)
-                                                        " block error: " (fourth blk) "\n"))
-                                  unevaluated-blocks " ")))
-          (if unmet-dependencies
-              (message "\norg-dotemacs: The following %d code block%s unmet dependencies: \n %s\n"
-                       (length unmet-dependencies)
-                       (if (= 1 (length unmet-dependencies)) " has" "s have")
-                       (mapconcat (lambda (blk) (concat "   " (second blk)
-                                                        " block depends on blocks: " (third blk)))
-                                  unmet-dependencies " "))))))))
+(defun org-dot-emacs-load-undeps (undeps-list &optional report-error)
+  ""
+  (let (error-blocks fail)
+    (dolist (block-name undeps-list)
+      (setq fail (try-eval-1 block-name))
+      (when fail
+	;; errored will be the errored blocks
+	(push block-name  error-blocks)
+	(if report-error
+	    (message "block %s load error with : %s" block-name fail))
+	))
+    error-blocks))
 
-;;;###autoload
-;; simple-call-tree-info: CHANGE  
-(defun* org-dotemacs-load-file (&optional match
-                                          (file org-dotemacs-default-file)
-                                          target-file
-                                          (error-handling org-dotemacs-error-handling))
-  "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
-Tag matches supplied at the command line get priority over those supplied by the MATCH argument,
-and if both of these are nil then `org-dotemacs-default-match' will be used to create a tag match.
-If you need to override the command line tag-match set `org-dotemacs-tag-match' to nil.
-If TARGET-FILE is supplied it should be a filename to save the elisp code to, but it should
-not be any of the default config files .emacs, .emacs.el, .emacs.elc or init.el
- (the function will halt with an error in those cases). If TARGET-FILE is newer than FILE then
-TARGET-FILE will be loaded and FILE will not be processed. Otherwise TARGET-FILE will be overwritten
-by the code blocks in FILE.
-The optional argument ERROR-HANDLING determines how errors are handled and takes default value
-`org-dotemacs-error-handling' (which see)."
-  (interactive (list nil
-                     (read-file-name (format "File to load (default %s): " org-dotemacs-default-file)
-                                     (file-name-directory org-dotemacs-default-file)
-                                     org-dotemacs-default-file
-                                     t nil
-                                     (lambda (file)
-                                       (string-match "\\.org$" file)))
-                     (if (y-or-n-p "Save elisp code to separate file?")
-                         (read-file-name "Save to file: " user-emacs-directory))))
-  (if (and target-file (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file))
-      (error "org-dotemacs: Refuse to overwrite %s" target-file))
-  (require 'ob-core)
-  (cl-flet ((age (file) (float-time
-                         (time-subtract (current-time)
-                                        (nth 5 (or (file-attributes (file-truename file))
-                                                   (file-attributes file)))))))
-    (if (and target-file
-             (file-exists-p target-file)
-             (> (age file) (age target-file)))
-        (load-file target-file)
-      (let ((visited-p (get-file-buffer (expand-file-name file)))
-            (match (or match (org-dotemacs-default-match)))
-            matchbuf to-be-removed)
-        (save-window-excursion
-          (find-file file)
-          (setq to-be-removed (current-buffer)
-                matchbuf (org-dotemacs-extract-subtrees (or org-dotemacs-tag-match match)))
-          (with-current-buffer matchbuf
-            ;; Hack: write the buffer out first to prevent org-babel-pre-tangle-hook
-            ;; prompting for a filename to save it in.
-            (write-file (concat temporary-file-directory (buffer-name)))
-            (org-dotemacs-load-blocks target-file error-handling)
-            (delete-file (concat temporary-file-directory (buffer-name))))
-          (kill-buffer matchbuf))
-        (unless visited-p
-          (kill-buffer to-be-removed))))))
+(defun try-eval-1 (blockname)
+  "load the code named blockname.
+no dependant should be handle,only the block itself"
+  (let* (fail
+	 (code-str (gethash blockname org-dot-emacs-blocks))
+	 )
+    (if (member blockname org-dotemacs-evaluated-blocks)
+	(progn
+	  (message "the block named %s has be loaded." blockname)
+	  nil
+	  )
+	(with-temp-buffer
+	  (ignore-errors (emacs-lisp-mode))
+	  (insert code-str)
+	  (message "org-dotemacs: Evaluating %s code-block" blockname)
+	  (setq fail nil)
+	  (condition-case err
+	      (eval-buffer)
+	    (error
+	     (setq fail (error-message-string err))
+	     (message "org-dotemacs: Error in %s code block: %s"
+		      blockname fail))))
+	  (unless fail
+	    (setq org-dotemacs-evaluated-blocks (cons blockname org-dotemacs-evaluated-blocks )))
+	  fail)))
+
+
+;; (org-dotemacs-load-file "tag1" "dotemacs-test.org")
 
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
@@ -596,7 +762,7 @@ and no code is saved."
 (message "org-dotemacs: error-handling = %s" (concat "'" (symbol-name org-dotemacs-error-handling)))
 (message "org-dotemacs: tag-match = %s" org-dotemacs-tag-match)
 
-(provide 'org-dotemacs)
+(provide 'org-dotemacs)			;(buffer-size)
 
 ;; (magit-push)
 ;; (yaoddmuse-post "EmacsWiki" "org-dotemacs.el" (buffer-name) (buffer-string) "update")
