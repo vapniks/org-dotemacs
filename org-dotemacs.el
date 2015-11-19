@@ -163,18 +163,18 @@
 ;; the end of your .emacs file:
 ;; 
 ;; (load-file "~/.emacs.d/org-dotemacs.el")
-;; (org-dotemacs-load-default)
+;; (let (find-file-hook) (org-dotemacs-load-default))
 ;; 
 ;; or if you want to just load code blocks matching a tag match:
 ;; 
 ;; (load-file "~/.emacs.d/org-dotemacs.el")
-;; (org-dotemacs-load-default "<TAG-MATCH>")
+;; (let (find-file-hook) (org-dotemacs-load-default "<TAG-MATCH>"))
 ;; 
 ;; To load a different org file either customize `org-dotemacs-default-file' or use the
 ;; `org-dotemacs-load-file' function, e.g:
 ;; 
 ;; (load-file "~/.emacs.d/org-dotemacs.el")
-;; (org-dotemacs-load-file "<TAG-MATCH>" "~/.emacs.d/my_emacs_config.org")
+;; (let (find-file-hook) (org-dotemacs-load-file "<TAG-MATCH>" "~/.emacs.d/my_emacs_config.org"))
 ;; 
 
 
@@ -207,7 +207,7 @@
 ;;; TODO
 ;;
 ;; Option to show prominent warning message if some blocks didn't load (e.g. in large font in dedicated buffer after startup)
-;; 
+;; Option to show full backtrace on error?
 
 ;;; Require
 (eval-when-compile (require 'cl))
@@ -286,7 +286,7 @@ argument '--tag-match'.")
 ;; simple-call-tree-info: DONE
 ;;;###autoload
 (unless (functionp 'topological-sort)
-  (defun* topological-sort (graph &key (test 'eql))
+  (cl-defun topological-sort (graph &key (test 'eql))
     "Returns a list of packages to install in order.
   Graph is an association list whose keys are objects and whose
 values are lists of objects on which the corresponding key depends.
@@ -347,7 +347,7 @@ in the topological ordering (i.e., the first value)."
 ;; This can be removed when the new code using `org-babel-map-src-blocks' has been implemented
 ;;;###autoload
 ;; simple-call-tree-info: REMOVE  
-(defun* org-dotemacs-extract-subtrees (match &optional
+(cl-defun org-dotemacs-extract-subtrees (match &optional
                                              (exclude-todo-state org-dotemacs-exclude-todo)
                                              (include-todo-state org-dotemacs-include-todo))
   "Extract subtrees in current org-mode buffer that match tag MATCH.
@@ -391,7 +391,7 @@ the copied subtrees will be visited."
 
 
 ;; The code below could be used in the rewrite of `org-dotemacs-load-blocks'
-;; (defun* org-dotemacs-load-blocks (file match &optional target-file
+;; (cl-defun org-dotemacs-load-blocks (file match &optional target-file
 ;;                                        (error-handling org-dotemacs-error-handling))
 ;;  (let* ((todo-only nil)
 ;;         (matcher (cdr (org-make-tags-matcher match)))
@@ -420,7 +420,7 @@ the copied subtrees will be visited."
 ;; reloaded if we decide to load another dependent block at some later point in time (after startup).
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(defun* org-dotemacs-load-blocks (file match &optional target-file
+(cl-defun org-dotemacs-load-blocks (file match &optional target-file
                                        (error-handling org-dotemacs-error-handling))
   "Load the emacs-lisp code blocks in FILE matching tag MATCH.
 Save the blocks to TARGET-FILE if it is non-nil.
@@ -521,7 +521,7 @@ argument which uses `org-dotemacs-error-handling' for its default value."
 
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(defun* org-dotemacs-load-file (&optional match
+(cl-defun org-dotemacs-load-file (&optional match
                                           (file org-dotemacs-default-file)
                                           target-file
                                           (error-handling org-dotemacs-error-handling))
@@ -575,7 +575,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(defun* org-dotemacs-load-default (&optional match)
+(cl-defun org-dotemacs-load-default (&optional match)
   "Load code from `org-dotemacs-default-file' matching tag MATCH.
 Unlike `org-dotemacs-load-file' the user is not prompted for the location of any files,
 and no code is saved."
