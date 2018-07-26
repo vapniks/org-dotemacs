@@ -363,15 +363,22 @@ the copied subtrees will be visited."
         todo-only copied-areas)
     (unless (eq major-mode 'org-mode) (org-mode))
     (org-scan-tags (lambda nil
-		     (let ((todo-state (org-get-todo-state)))
+		     (let ((level (save-match-data
+				    (forward-line 0)
+				    (re-search-forward outline-regexp)
+				    (forward-line 0)
+				    (outline-level)))
+			   (todo-state (org-get-todo-state)))
 		       (unless (or (and exclude-todo-state
 					todo-state
-					(string-match exclude-todo-state
-						      todo-state))
+					(string-match exclude-todo-state todo-state))
 				   (and include-todo-state
 					todo-state
-					(not (string-match include-todo-state
-							   todo-state)))
+					(not (string-match include-todo-state todo-state)))
+				   (save-excursion
+				     (outline-next-heading)
+				     (and (< level (outline-level))
+					  (not (= (point) (point-max)))))
 				   (cl-loop for pair in copied-areas
 					    if (and (>= (point) (car pair))
 						    (< (point) (cdr pair)))
@@ -542,8 +549,8 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
                                      (file-name-directory org-dotemacs-default-file)
                                      org-dotemacs-default-file
                                      t nil
-                                     (lambda (file)
-                                       (string-match "\\.org$" file)))
+				     (lambda (file)
+				       (string-match "\\.org$" file)))
                      (if (y-or-n-p "Save elisp code to separate file?")
                          (read-file-name "Save to file: " user-emacs-directory))))
   (if (and target-file (string-match "\\(?:\\.emacs\\(?:\\.elc?\\)?\\|init\\.elc?\\)$" target-file))
@@ -571,7 +578,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
             ;; Hack: write the buffer out first to prevent org-babel-pre-tangle-hook
             ;; prompting for a filename to save it in.
             (write-file (concat temporary-file-directory (buffer-name)))
-            (org-dotemacs-load-blocks target-file error-handling)
+	    (org-dotemacs-load-blocks target-file error-handling)
             (delete-file (concat temporary-file-directory (buffer-name))))
           (kill-buffer matchbuf))
         (unless visited-p
