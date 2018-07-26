@@ -422,7 +422,7 @@ the copied subtrees will be visited."
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
 (cl-defun org-dotemacs-load-blocks (&optional target-file (error-handling org-dotemacs-error-handling))
-  "Load the emacs-lisp code blocks in FILE matching tag MATCH.
+  "Load the emacs-lisp code blocks in current buffer.
 Save the blocks to TARGET-FILE if it is non-nil.
 See the definition of `org-dotemacs-error-handling' for an explanation of the ERROR-HANDLING
 argument which uses `org-dotemacs-error-handling' for its default value."
