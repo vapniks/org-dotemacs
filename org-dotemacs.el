@@ -12,7 +12,7 @@
 ;; URL: https://github.com/vapniks/org-dotemacs
 ;; Keywords: local
 ;; Compatibility: GNU Emacs 24.3.1
-;; Package-Requires: ((org "7.9.3") (cl-lib "1.0"))
+;; Package-Requires: ((org "7.9.3") (cl-lib "0.5"))
 ;;
 ;; Features that might be required by this library:
 ;;
@@ -210,7 +210,7 @@
 ;; Option to show full backtrace on error?
 
 ;;; Require
-(eval-when-compile (require 'cl))
+(require 'cl-lib)
 (require 'org)
 
 ;;; Code:
@@ -305,42 +305,42 @@ in the topological ordering (i.e., the first value)."
                         (puthash v (cons 0 '()) entries)))))
       ;; populate entries initially
       (dolist (gvertex graph)
-        (destructuring-bind (vertex &rest dependencies) gvertex
+        (cl-destructuring-bind (vertex &rest dependencies) gvertex
           (let ((ventry (funcall entry vertex)))
             (dolist (dependency dependencies)
               (let ((dentry (funcall entry dependency)))
                 (unless (funcall test dependency vertex)
-                  (incf (car ventry))
+                  (cl-incf (car ventry))
                   (push vertex (cdr dentry))))))))
       ;; L is the list of sorted elements, and S the set of vertices
       ;; with no outstanding dependencies.
       (let ((L '())
-            (S (loop for entry being each hash-value of entries
-                     using (hash-key vertex)
-                     when (zerop (car entry)) collect vertex)))
+            (S (cl-loop for entry being each hash-value of entries
+                        using (hash-key vertex)
+                        when (zerop (car entry)) collect vertex)))
         ;; Until there are no vertices with no outstanding dependencies,
         ;; process vertices from S, adding them to L.
-        (do* () ((endp S))
+        (cl-do* () ((cl-endp S))
           (let* ((v (pop S)) (ventry (funcall entry v)))
             (remhash v entries)
             (dolist (dependant (cdr ventry) (push v L))
-              (when (zerop (decf (car (funcall entry dependant))))
+              (when (zerop (cl-decf (car (funcall entry dependant))))
                 (push dependant S)))))
         ;; return (1) the list of sorted items, (2) whether all items
         ;; were sorted, and (3) if there were unsorted vertices, the
         ;; hash table mapping these vertices to their dependants
         (let ((all-sorted-p (zerop (hash-table-count entries))))
-          (values (nreverse L)
-                  all-sorted-p
-                  (unless all-sorted-p
-                    entries)))))))
+          (cl-values (nreverse L)
+                     all-sorted-p
+                     (unless all-sorted-p
+                       entries)))))))
 
 ;;;###autoload
 ;; simple-call-tree-info: DONE
 (defun org-dotemacs-default-match nil
   "Returns the default tag match string based on items in `org-dotemacs-conditional-tags' (which see)."
-  (let ((str (loop for (regex . condition) in org-dotemacs-conditional-tags
-                   if (eval condition) concat (concat regex "\\|"))))
+  (let ((str (cl-loop for (regex . condition) in org-dotemacs-conditional-tags
+                      if (eval condition) concat (concat regex "\\|"))))
     (if (not (equal str ""))
         (concat "-{" (substring str 0 -2) "}"))))
 
@@ -371,10 +371,10 @@ the copied subtrees will be visited."
 					todo-state
 					(not (string-match include-todo-state
 							   todo-state)))
-                                   (loop for pair in copied-areas
-                                         if (and (>= (point) (car pair))
-                                                 (< (point) (cdr pair)))
-                                         return t))
+				   (cl-loop for pair in copied-areas
+					    if (and (>= (point) (car pair))
+						    (< (point) (cdr pair)))
+					    return t))
 			 (let ((start (point)) end)
 			   (org-copy-subtree)
 			   (setq end (+ start (length (current-kill 0 t))))
@@ -491,11 +491,11 @@ argument which uses `org-dotemacs-error-handling' for its default value."
                       (setq unmet-dependencies (append unmet-dependencies (list (list spec blockname blockdeps)))))
                      (t (if (eq error-handling 'retry)
                             (while (and (not fail) (or unevaluated-blocks unmet-dependencies))
-                              (loop for blk in (append unevaluated-blocks unmet-dependencies)
-                                    do (setq fail (funcall try-eval (car blk) (second blk) (third blk)))
-                                    unless fail do (setq unevaluated-blocks (remove blk unevaluated-blocks)
-                                                         unmet-dependencies (remove blk unmet-dependencies))
-                                    and return t))))))
+                              (cl-loop for blk in (append unevaluated-blocks unmet-dependencies)
+                                       do (setq fail (funcall try-eval (car blk) (cl-second blk) (cl-third blk)))
+                                       unless fail do (setq unevaluated-blocks (remove blk unevaluated-blocks)
+                                                            unmet-dependencies (remove blk unmet-dependencies))
+                                       and return t))))))
              (setq block-counter (+ 1 block-counter))))
          specs)
         (if (and (not unevaluated-blocks) (not unmet-dependencies))
@@ -508,15 +508,15 @@ argument which uses `org-dotemacs-error-handling' for its default value."
               (message "\norg-dotemacs: The following %d code block%s errors: \n %s\n"
                        (length unevaluated-blocks)
                        (if (= 1 (length unevaluated-blocks)) " has" "s have")
-                       (mapconcat (lambda (blk) (concat "   " (second blk)
-                                                        " block error: " (fourth blk) "\n"))
+                       (mapconcat (lambda (blk) (concat "   " (cl-second blk)
+                                                        " block error: " (cl-fourth blk) "\n"))
                                   unevaluated-blocks " ")))
           (if unmet-dependencies
               (message "\norg-dotemacs: The following %d code block%s unmet dependencies: \n %s\n"
                        (length unmet-dependencies)
                        (if (= 1 (length unmet-dependencies)) " has" "s have")
-                       (mapconcat (lambda (blk) (concat "   " (second blk)
-                                                        " block depends on blocks: " (third blk)))
+                       (mapconcat (lambda (blk) (concat "   " (cl-second blk)
+                                                        " block depends on blocks: " (cl-third blk)))
                                   unmet-dependencies " "))))))))
 
 ;;;###autoload
