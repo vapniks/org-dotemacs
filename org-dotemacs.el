@@ -348,8 +348,8 @@ in the topological ordering (i.e., the first value)."
 ;;;###autoload
 ;; simple-call-tree-info: REMOVE  
 (cl-defun org-dotemacs-extract-subtrees (match &optional
-                                             (exclude-todo-state org-dotemacs-exclude-todo)
-                                             (include-todo-state org-dotemacs-include-todo))
+					       (exclude-todo-state org-dotemacs-exclude-todo)
+					       (include-todo-state org-dotemacs-include-todo))
   "Extract subtrees in current org-mode buffer that match tag MATCH.
 MATCH should be a tag match as detailed in the org manual.
 If EXCLUDE-TODO-STATE is non-nil then subtrees with todo states matching this regexp will be
@@ -361,6 +361,7 @@ the copied subtrees will be visited."
   (interactive '(nil))
   (let ((buf (generate-new-buffer (buffer-name)))
         todo-only copied-areas)
+    (unless (eq major-mode 'org-mode) (org-mode))
     (org-scan-tags (lambda nil
 		     (let ((todo-state (org-get-todo-state)))
 		       (unless (or (and exclude-todo-state
@@ -421,13 +422,14 @@ the copied subtrees will be visited."
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
 (cl-defun org-dotemacs-load-blocks (file match &optional target-file
-                                       (error-handling org-dotemacs-error-handling))
+					 (error-handling org-dotemacs-error-handling))
   "Load the emacs-lisp code blocks in FILE matching tag MATCH.
 Save the blocks to TARGET-FILE if it is non-nil.
 See the definition of `org-dotemacs-error-handling' for an explanation of the ERROR-HANDLING
 argument which uses `org-dotemacs-error-handling' for its default value."
   (save-restriction
     (save-excursion
+      (unless (eq major-mode 'org-mode) (org-mode))
       (let* ((block-counter 1)
              (org-babel-default-header-args
               (org-babel-merge-params org-babel-default-header-args
