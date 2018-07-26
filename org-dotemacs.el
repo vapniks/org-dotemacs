@@ -420,7 +420,7 @@ the copied subtrees will be visited."
 ;; reloaded if we decide to load another dependent block at some later point in time (after startup).
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(cl-defun org-dotemacs-load-blocks (file match &optional target-file
+(cl-defun org-dotemacs-load-blocks (&optional target-file
                                        (error-handling org-dotemacs-error-handling))
   "Load the emacs-lisp code blocks in FILE matching tag MATCH.
 Save the blocks to TARGET-FILE if it is non-nil.
