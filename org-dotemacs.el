@@ -570,6 +570,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
             ;; Hack: write the buffer out first to prevent org-babel-pre-tangle-hook
             ;; prompting for a filename to save it in.
             (write-file (concat temporary-file-directory (buffer-name)))
+	    (org-mode)
             (org-dotemacs-load-blocks target-file error-handling)
             (delete-file (concat temporary-file-directory (buffer-name))))
           (kill-buffer matchbuf))
