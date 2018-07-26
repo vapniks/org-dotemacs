@@ -124,7 +124,7 @@ blocks that have errors.
 To use without using a package manager:
 
  - Put the library in a directory in the emacs load path, like ~/.emacs.d
- - Add (require 'org-dotemacs) in your ~/.emacs file
+ - Add src_emacs-lisp{(require 'org-dotemacs)} in your ~/.emacs file
  - If you have [[http://www.marmalade-repo.org/][marmalade-repo.org]], this org-dotemacs is part of the emacs packges you can install.  
    Just type M-x package-install org-dotemacs marmalade 
 

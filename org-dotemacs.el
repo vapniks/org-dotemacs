@@ -522,9 +522,9 @@ argument which uses `org-dotemacs-error-handling' for its default value."
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
 (cl-defun org-dotemacs-load-file (&optional match
-                                          (file org-dotemacs-default-file)
-                                          target-file
-                                          (error-handling org-dotemacs-error-handling))
+					    (file org-dotemacs-default-file)
+					    target-file
+					    (error-handling org-dotemacs-error-handling))
   "Load the elisp code from code blocks in org FILE under headers matching tag MATCH.
 Tag matches supplied at the command line get priority over those supplied by the MATCH argument,
 and if both of these are nil then `org-dotemacs-default-match' will be used to create a tag match.
@@ -558,7 +558,10 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
         (load-file target-file)
       (let ((visited-p (get-file-buffer (expand-file-name file)))
             (match (or match (org-dotemacs-default-match)))
-            matchbuf to-be-removed)
+            matchbuf to-be-removed
+	    ;; make sure we dont get any strange behaviour from hooks
+	    find-file-hook change-major-mode-after-body-hook
+	    text-mode-hook outline-mode-hook org-mode-hook)
         (save-window-excursion
           (find-file file)
           (setq to-be-removed (current-buffer)
