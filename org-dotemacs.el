@@ -282,58 +282,61 @@ argument '--tag-match'.")
 (defvar org-dotemacs-evaluated-blocks nil
   "A list of names of blocks that have already been evaluated")
 
-;; The following function was swiped from el-get-dependencies.el : https://github.com/dimitri/el-get/
+;; The following function is based on code from el-get-dependencies.el : https://github.com/dimitri/el-get/
 ;; simple-call-tree-info: DONE
 ;;;###autoload
-(unless (functionp 'topological-sort)
-  (cl-defun topological-sort (graph &key (test 'eql))
-    "Returns a list of packages to install in order.
-  Graph is an association list whose keys are objects and whose
-values are lists of objects on which the corresponding key depends.
-Test is used to compare elements, and should be a suitable test for
-hash-tables.  Topological-sort returns two values.  The first is a
-list of objects sorted toplogically.  The second is a boolean
-indicating whether all of the objects in the input graph are present
-in the topological ordering (i.e., the first value)."
-    (let* ((entries (make-hash-table :test test))
-           ;; avoid obsolete `flet' & backward-incompatible `cl-flet'
-           (entry (lambda (v)
-                    "Return the entry for vertex.  Each entry is a cons whose
+(cl-defun org-dotemacs-sort (graph &key failp (test 'eql))
+  "Returns a list of items whose order is consistent with the supplied dependency GRAPH.
+GRAPH is an association list whose keys are items, and whose values are lists of items 
+on which the corresponding key depends.
+TEST is used to compare elements, and should be a suitable test for hash-tables. 
+FAILP is an optional function that takes an item as argument and returns non-nil if that 
+item cannot be depended upon by others.
+
+A list of the following four values is returned.
+1: list of objects sorted such that dependent items come after their dependencies in the list.
+   Failed items, and items with failed dependencies will not be included in this list.
+2: boolean indicating whether all objects in the input GRAPH are present in the previous list.
+3: list of failed items (i.e. items which return non-nil when passed to FAILP).
+4: list of items which could not be processed because they depend on failed items, or are part of
+   a circular dependency."
+  (let* ((entries (make-hash-table :test test))
+	 ;; avoid obsolete `flet' & backward-incompatible `cl-flet'
+	 (entry (lambda (v)
+		  "Return the entry for vertex.  Each entry is a cons whose
               car is the number of outstanding dependencies of vertex
               and whose cdr is a list of dependants of vertex."
-                    (or (gethash v entries)
-                        (puthash v (cons 0 '()) entries)))))
-      ;; populate entries initially
-      (dolist (gvertex graph)
-        (cl-destructuring-bind (vertex &rest dependencies) gvertex
-          (let ((ventry (funcall entry vertex)))
-            (dolist (dependency dependencies)
-              (let ((dentry (funcall entry dependency)))
-                (unless (funcall test dependency vertex)
-                  (cl-incf (car ventry))
-                  (push vertex (cdr dentry))))))))
-      ;; L is the list of sorted elements, and S the set of vertices
-      ;; with no outstanding dependencies.
-      (let ((L '())
-            (S (cl-loop for entry being each hash-value of entries
-                        using (hash-key vertex)
-                        when (zerop (car entry)) collect vertex)))
-        ;; Until there are no vertices with no outstanding dependencies,
-        ;; process vertices from S, adding them to L.
-        (cl-do* () ((cl-endp S))
-          (let* ((v (pop S)) (ventry (funcall entry v)))
-            (remhash v entries)
-            (dolist (dependant (cdr ventry) (push v L))
-              (when (zerop (cl-decf (car (funcall entry dependant))))
-                (push dependant S)))))
-        ;; return (1) the list of sorted items, (2) whether all items
-        ;; were sorted, and (3) if there were unsorted vertices, the
-        ;; hash table mapping these vertices to their dependants
-        (let ((all-sorted-p (zerop (hash-table-count entries))))
-          (cl-values (nreverse L)
-                     all-sorted-p
-                     (unless all-sorted-p
-                       entries)))))))
+		  (or (gethash v entries)
+		      (puthash v (cons 0 '()) entries)))))
+    ;; populate entries initially
+    (dolist (gvertex graph)
+      (cl-destructuring-bind (vertex &rest dependencies) gvertex
+	(let ((ventry (funcall entry vertex)))
+	  (dolist (dependency dependencies)
+	    (let ((dentry (funcall entry dependency)))
+	      (unless (funcall test dependency vertex)
+		(cl-incf (car ventry))
+		(push vertex (cdr dentry))))))))
+    ;; L is the list of sorted elements, and S the set of vertices
+    ;; with no outstanding dependencies.
+    (let ((L '())
+	  (S (cl-loop for entry being each hash-value of entries
+		      using (hash-key vertex)
+		      when (zerop (car entry)) collect vertex))
+	  (failed '()))
+      ;; Until there are no vertices with no outstanding dependencies,
+      ;; process vertices from S, adding them to L.
+      (cl-do* () ((cl-endp S))
+	(let* ((v (pop S)) (ventry (funcall entry v)))
+	  (remhash v entries)
+	  (if (and failp (funcall failp v))
+	      (push v failed)
+	    (dolist (dependant (cdr ventry) (push v L))
+	      (when (zerop (cl-decf (car (funcall entry dependant))))
+		(push dependant S))))))
+      ;; return values
+      (let ((all-sorted-p (zerop (hash-table-count entries))))
+	(list (nreverse L) all-sorted-p failed (unless all-sorted-p entries))))))
 
 ;;;###autoload
 ;; simple-call-tree-info: DONE
@@ -400,22 +403,30 @@ the copied subtrees will be visited."
 
 ;; The code below could be used in the rewrite of `org-dotemacs-load-blocks'
 ;; (cl-defun org-dotemacs-load-blocks (file match &optional target-file
-;;                                        (error-handling org-dotemacs-error-handling))
-;;  (let* ((todo-only nil)
-;;         (matcher (cdr (org-make-tags-matcher match)))
-;;         (blocks nil)
-;;         unevaluated-blocks unmet-dependencies)
-;;    (org-babel-map-src-blocks file
-;;      (let* ((tags-list (org-get-tags-at))
-;;             (name (org-entry-get (point) "NAME" nil))
-;;             (depsmet (cl-subsetp blockdeps evaluated-blocks :test 'equal)))
-;;        (if (and (equal lang "emacs-lisp")
-;;                 (eval matcher)
-;;                 (cl-subsetp (org-entry-get (point) "DEPENDS" org-use-property-inheritance)
-;;                             evaluated-blocks :test 'equal))
-;;            (eval (read-from-string))
-;;            (add-to-list 'blocks body))))
-;;    blocks))
+;; 					 (error-handling org-dotemacs-error-handling))
+;;   (let* ((todo-only nil)
+;; 	 (matcher (cdr (org-make-tags-matcher match)))
+;; 	 (blocks nil)
+;; 	 bad-blocks
+;; 	 evaluated-blocks unevaluated-blocks unmet-dependencies)
+;;     (org-babel-map-src-blocks file
+;;       (let* ((tags-list (org-get-tags-at))
+;; 	     (name (org-entry-get (point) "NAME" nil))
+;; 	     (blockdeps (split-string
+;; 			 (org-entry-get beg-block "DEPENDS" org-use-property-inheritance)
+;; 			 "[[:space:]]+")))
+;; 	(if (and (equal lang "emacs-lisp")
+;; 		 (eval matcher)
+;; 		 (cl-subsetp blockdeps evaluated-blocks :test 'equal))
+;; 	    (add-to-list (if (with-temp-buffer (insert body)
+;; 					       (condition-case err 
+;; 						   (eval-buffer)
+;; 						 (error (message "%s" (error-message-string err))
+;; 							t)))
+;; 			     'bad-blocks 'evaluated-blocks)
+;; 			 name)
+;; 	  (add-to-list 'unevaluated-blocks name))))
+;;     blocks))
 
 
 ;; This should be rewritten to loop over the code blocks using `org-babel-map-src-blocks' storing them
