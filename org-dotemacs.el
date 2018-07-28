@@ -191,11 +191,10 @@
 ;;
 
 ;;; Change log:
-;; 4-May-2013      
-;;    Last-Updated: 2013-04-27 20:19:18 (Joe Bloggs)
-;;    ;;    
+;; [2018-07-28 Sat]
+;;      * Refactor code to use org-dotemacs-topo-sort
 ;;	
-;; 2013/04/27
+;; [2013-04-27]
 ;;      * First released.
 ;; 
 
@@ -268,9 +267,7 @@ This behaviour is overridden if a tag-match is supplied on the command line."
 
 (defcustom org-dotemacs-dependency-inheritance nil
   "Whether dependency properties (:DEPENDS:) can be inherited or not.
-Allowing property inheritance can be more convenient, but also makes loading slower.
-If nil then don't inherit :DEPENDS: property values, if t then do, and if 'selective then use
-inheritance only if the setting in `org-use-property-inheritance' selects DEPENDS for inheritance"
+This is passed straight to `org-entry-get'. See the documentation of that function for more info."
   :group 'org-dotemacs
   :type '(choice (const nil) (const t) (const selective)))
 
@@ -391,10 +388,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
              (> (age file) (age target-file)))
         (load-file target-file)
       (let* ((matcher (cdr (org-make-tags-matcher
-			    (concat "-TODO={"
-				    org-dotemacs-exclude-todo "}&("
-				    (or match (org-dotemacs-default-match))
-				    ")"))))
+			    (or match (org-dotemacs-default-match)))))
 	     (todo-only nil)
 	     blocks graph
 	     ;; make sure we dont get any strange behaviour from hooks
@@ -402,8 +396,15 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 	     text-mode-hook outline-mode-hook org-mode-hook)
 	(message "org-dotemacs: parsing %s" file)
 	(org-babel-map-src-blocks file
-	  (let ((parts (org-heading-components)))
+	  (let* ((parts (org-heading-components))
+		 (todo (nth 2 parts)))
 	    (if (and (equal lang "emacs-lisp")
+		     (if (and todo org-dotemacs-include-todo)
+			 (string-match org-dotemacs-include-todo todo)
+		       t)
+		     (if (and todo org-dotemacs-exclude-todo)
+			 (not (string-match org-dotemacs-exclude-todo todo))
+		       t)
 		     (save-excursion
 		       (unless (outline-on-heading-p t)
 			 (outline-previous-heading))
@@ -413,12 +414,12 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 				     (split-string (nth 5 parts) ":" t))
 				(car parts))))
 		(let ((name (org-entry-get beg-block "NAME"))
-		      (depends (org-entry-get beg-block "DEPENDS")))
+		      (depends (org-entry-get
+				beg-block "DEPENDS" org-dotemacs-dependency-inheritance)))
 		  (push (cons name (and depends (split-string depends "[[:space:]]+"))) graph)
 		  (push (cons name (substring-no-properties body)) blocks)))))
 	(cl-destructuring-bind (evaled-blocks allgood bad-blocks unevaled-blocks)
-	    (org-dotemacs-topo-sort graph blocks
-				    (not (memq error-handling '(skip retry))))
+	    (org-dotemacs-topo-sort graph blocks (not (memq error-handling '(skip retry))))
 	  (if (eq error-handling 'retry)
 	      (let ((oldlen 0))
 		(while (/= oldlen (length bad-blocks))
