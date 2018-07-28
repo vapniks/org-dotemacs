@@ -6,8 +6,8 @@
 ;; Maintainer: Joe Bloggs <vapniks@yahoo.com>
 ;; Copyleft (Ↄ) 2013, Joe Bloggs, all rites reversed.
 ;; Created: 2013-04-27 20:19:18
-;; Version: 0.3
-;; Last-Updated: 2013-09-09 20:19:18
+;; Version: 0.4
+;; Last-Updated: 2018-07-28 22:22:18
 ;;           By: Joe Bloggs
 ;; URL: https://github.com/vapniks/org-dotemacs
 ;; Keywords: local
@@ -304,11 +304,10 @@ A list of the following four values is returned.
 4: list of blocks which could not be processed because they depend on failed blocks, or are part of
    a circular dependency."
   (let* ((entries (make-hash-table :test 'equal))
-	 ;; avoid obsolete `flet' & backward-incompatible `cl-flet'
+	 ;; function to return the entry for vertex v. Each entry is a cons
+	 ;; whose car is the number of outstanding dependencies of vertex
+	 ;; and whose cdr is a list of dependents of vertex.
 	 (entry (lambda (v)
-		  "Return the entry for vertex.  Each entry is a cons whose
-              car is the number of outstanding dependencies of vertex
-              and whose cdr is a list of dependants of vertex."
 		  (or (gethash v entries)
 		      (puthash v (cons 0 '()) entries)))))
     ;; populate entries initially
