@@ -413,8 +413,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 				     (split-string (nth 5 parts) ":" t))
 				(car parts))))
 		(let ((name (org-entry-get beg-block "NAME"))
-		      (depends (org-entry-get
-				beg-block "DEPENDS" org-dotemacs-dependency-inheritance)))
+		      (depends (org-entry-get beg-block "DEPENDS" org-dotemacs-dependency-inheritance)))
 		  (push (cons name (and depends (split-string depends "[[:space:]]+"))) graph)
 		  (push (cons name (substring-no-properties body)) blocks)))))
 	(cl-destructuring-bind (evaled-blocks allgood bad-blocks unevaled-blocks)
@@ -440,7 +439,9 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 		(insert (concat ";; org-dotemacs: code extracted from " file "\n"))
 		(dolist (blk evaled-blocks)
 		  (insert (concat ";; Block = " blk "\n"))
-		  (insert (cdr (assoc blk blocks))))
+		  (insert (concat "(message \"org-dotemacs: block " blk "\")"))
+		  (insert (cdr (assoc blk blocks)))
+		  (insert (concat "(message \"org-dotemacs: " blk " block evaluated\")")))
 		(write-file target-file)))
 	  (if allgood
 	      (message "org-dotemacs: all %d blocks evaluated successfully."
