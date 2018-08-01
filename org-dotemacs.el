@@ -439,9 +439,9 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 		(insert (concat ";; org-dotemacs: code extracted from " file "\n"))
 		(dolist (blk evaled-blocks)
 		  (insert (concat ";; Block = " blk "\n"))
-		  (insert (concat "(message \"org-dotemacs: block " blk "\")"))
-		  (insert (cdr (assoc blk blocks)))
-		  (insert (concat "(message \"org-dotemacs: " blk " block evaluated\")")))
+		  (insert (concat "(message \"org-dotemacs: evaluating " blk " block\")\n"))
+		  (insert (cdr (assoc blk blocks))))
+		(insert (format "(message \"org-dotemacs: all %s blocks evaluated.\")\n" (length evaled-blocks)))
 		(write-file target-file)))
 	  (if allgood
 	      (message "org-dotemacs: all %d blocks evaluated successfully."
