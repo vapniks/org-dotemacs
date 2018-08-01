@@ -279,11 +279,11 @@ argument '--tag-match'.")
 ;;;###autoload
 ;; simple-call-tree-info: DONE
 (defun org-dotemacs-default-match nil
-  "Returns the default tag match string based on items in `org-dotemacs-conditional-tags' (which see)."
+  "Return the default tag match string based on items in `org-dotemacs-conditional-tags' (which see)."
   (let ((str (cl-loop for (regex . condition) in org-dotemacs-conditional-tags
-                      if (eval condition) concat (concat regex "\\|"))))
+                      if (not (eval condition)) concat (concat regex "\\|"))))
     (if (not (equal str ""))
-        (concat "-{" (substring str 0 -2) "}"))))
+        (concat "-{\\(?:" (substring str 0 -2) "\\)}"))))
 
 ;; The following function is based on code from el-get-dependencies.el : https://github.com/dimitri/el-get/
 ;; simple-call-tree-info: DONE
@@ -386,8 +386,10 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
              (file-exists-p target-file)
              (> (age file) (age target-file)))
         (load-file target-file)
-      (let* ((matcher (cdr (org-make-tags-matcher
-			    (or match (org-dotemacs-default-match)))))
+      (let* ((matchstr (or match (org-dotemacs-default-match)))
+	     (matcher (if matchstr
+			  (cdr (org-make-tags-matcher matchstr))
+			(lambda (&rest args) t)))
 	     (todo-only nil)
 	     blocks graph
 	     ;; make sure we dont get any strange behaviour from hooks
@@ -441,7 +443,11 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 		  (insert (concat ";; Block = " blk "\n"))
 		  (insert (concat "(message \"org-dotemacs: evaluating " blk " block\")\n"))
 		  (insert (cdr (assoc blk blocks))))
-		(insert (format "(message \"org-dotemacs: all %s blocks evaluated.\")\n" (length evaled-blocks)))
+		(insert (format "(message \"org-dotemacs: %s blocks evaluated.\")\n" (length evaled-blocks)))
+		(insert (format "(message \"org-dotemacs: %s blocks not considered (see %s).\")\n"
+				(+ (length bad-blocks)
+				   (length unevaled-blocks))
+				file))
 		(write-file target-file)))
 	  (if allgood
 	      (message "org-dotemacs: all %d blocks evaluated successfully."
