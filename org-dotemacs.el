@@ -382,19 +382,19 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
                          (time-subtract (current-time)
                                         (nth 5 (or (file-attributes (file-truename file))
                                                    (file-attributes file)))))))
-    (if (and target-file
-             (file-exists-p target-file)
-             (> (age file) (age target-file)))
-        (load-file target-file)
-      (let* ((matchstr (or match (org-dotemacs-default-match)))
-	     (matcher (if matchstr
-			  (cdr (org-make-tags-matcher matchstr))
-			(lambda (&rest args) t)))
-	     (todo-only nil)
-	     blocks graph
-	     ;; make sure we dont get any strange behaviour from hooks
-	     find-file-hook change-major-mode-after-body-hook
-	     text-mode-hook outline-mode-hook org-mode-hook)
+    (let* ((matchstr (or match (org-dotemacs-default-match)))
+	   (matcher (if matchstr
+			(cdr (org-make-tags-matcher matchstr))
+		      (lambda (&rest args) t)))
+	   (todo-only nil)
+	   blocks graph
+	   ;; make sure we dont get any strange behaviour from hooks
+	   find-file-hook change-major-mode-after-body-hook
+	   text-mode-hook outline-mode-hook org-mode-hook)
+      (if (and target-file
+	       (file-exists-p target-file)
+	       (> (age file) (age target-file)))
+	  (load-file target-file)
 	(message "org-dotemacs: parsing %s" file)
 	(org-babel-map-src-blocks file
 	  (let* ((parts (org-heading-components))
@@ -435,7 +435,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 		  (setq evaled-blocks (append evaled-blocks (car vals))
 			allgood (nth 1 vals)
 			bad-blocks (nth 2 vals)
- 			unevaled-blocks (nth 3 vals)))))
+			unevaled-blocks (nth 3 vals)))))
 	  (if target-file
 	      (with-temp-buffer
 		(insert (concat ";; org-dotemacs: code extracted from " file "\n"))
@@ -476,15 +476,16 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(cl-defun org-dotemacs-load-default (&optional match)
+(cl-defun org-dotemacs-load-default (&optional match savep)
   "Load code from `org-dotemacs-default-file' matching tag MATCH.
 Unlike `org-dotemacs-load-file' the user is not prompted for the location of any files,
 and no code is saved."
   (interactive (list nil))
   (org-dotemacs-load-file
    match org-dotemacs-default-file
-   (concat (file-name-sans-extension org-dotemacs-default-file)
-	   ".el")))
+   (if savep
+       (concat (file-name-sans-extension org-dotemacs-default-file)
+	       ".el"))))
 
 ;; Code to handle command line arguments
 (let* ((errpos (or (cl-position-if (lambda (x) (equal x "-error-handling")) command-line-args)
