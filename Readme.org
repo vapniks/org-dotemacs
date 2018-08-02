@@ -33,7 +33,7 @@ and specify dependencies between code blocks.
 Using tag matches you can also reuse the same org file for different emacs setups by specifying different
 tag matches for each setup, or load parts of the file on demand.
 * Commands/Usage 
-The main command is `org-dotemacs-load-default' which loads your default org-dotemacs file (~/.dotemacs.org)
+The main command is `org-dotemacs-load-default' which loads your default org-dotemacs file (~/.dotemacs.org),
 and prompts for a tag match to specify which code blocks to load. 
 In this way you can load bits of config code when you need them.
 
@@ -44,6 +44,9 @@ If you want to load a different org file from your default one, use `org-dotemac
 For faster loading you may prefer to keep your config code in a separate elisp file, and just update this file now and again
 by exporting the code from the org file.
 Use the `org-dotemacs-load-file' command for this and specify a target file when prompted.
+Note however that you may get errors when loading the elisp file that you didnt get with the org file.
+This is because in order to process the org-file some other libraries are loaded which are not loaded when the elisp file loads.
+You will have to experiment for yourself.
 * Structure of the org file 
 The elisp code should be contained in emacs-lisp code blocks, e.g:
 
@@ -71,11 +74,6 @@ blocks (preferred). The NAME property should contain the name of the block, and 
 separated list of block names that this block depends on.
 These properties will be applied to all code blocks in the subtree (see "[[http://orgmode.org/org.html#Properties-and-Columns][Properties and Columns]]" in the org manual for
 more details).
-
-The NAME property can be overridden on a per block basis by adding a :name header arg to a block, and dependencies can be
-augmented by adding a :depends header arg (see "[[http://orgmode.org/org.html#Header-arguments][Header arguments]]" in the org manual).
-However it is recommended to keep a separate subtree for each code block and use properties for defining headers and names
-since then you can get a column view of the dependencies (see below).
 
 A block will not be loaded until all of its dependencies have been loaded.
 * Tags and TODO states 
@@ -105,7 +103,8 @@ Error handling can be controlled by customizing `org-dotemacs-error-handling' or
 command line option when starting emacs.
 By default code blocks with unmet dependencies or errors are skipped over as soon as an error is encountered,
 but you can also specify that org-dotemacs should halt or try to reload the blocks.
-In the latter case each time a new block is successfully loaded, any unsuccessful blocks will be retried.
+In the latter case after attempting to evaluate all blocks, any blocks with errors will be tried again. 
+This process is repeated until there are no changes in the blocks that succeed, or no bad blocks left.
 * Command line options 
 org-dotemacs.el will look for two command line options when loaded: error-handling (for setting the value of
 `org-dotemacs-error-handling') and tag-match (for specifying which headers to load).
@@ -120,6 +119,8 @@ blocks that have errors.
 - `org-dotemacs-error-handling' : Indicates how errors should be handled by `org-dotemacs-load-blocks'.
 - `org-dotemacs-include-todo'   : A regular expression matching TODO states to be included.
 - `org-dotemacs-exclude-todo'   : A regular expression matching TODO states to be excluded.
+- `org-dotemacs-conditional-tags' : A list of tags/regexps and corresponding conditions for loading blocks.
+- `org-dotemacs-dependency-inheritance' : Whether dependency properties (:DEPENDS:) can be inherited or not.
 * Installation
 To use without using a package manager:
 

@@ -478,8 +478,10 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 ;; simple-call-tree-info: CHANGE  
 (cl-defun org-dotemacs-load-default (&optional match savep)
   "Load code from `org-dotemacs-default-file' matching tag MATCH.
-Unlike `org-dotemacs-load-file' the user is not prompted for the location of any files,
-and no code is saved."
+If SAVEP is non-nil then `org-dotemacs-load-file' will be called with TARGET-FILE
+argument set to the value of `org-dotemacs-default-file' with the file ending 
+replaced with \".el\".
+The user will not be prompted for the location of any files."
   (interactive (list nil))
   (org-dotemacs-load-file
    match org-dotemacs-default-file
