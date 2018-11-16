@@ -398,7 +398,8 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 	(message "org-dotemacs: parsing %s" file)
 	(org-babel-map-src-blocks file
 	  (let* ((parts (org-heading-components))
-		 (todo (nth 2 parts)))
+		 (todo (nth 2 parts))
+		 (tags (org-get-tags-at)))
 	    (if (and (equal lang "emacs-lisp")
 		     (if (and todo org-dotemacs-include-todo)
 			 (string-match org-dotemacs-include-todo todo)
@@ -411,8 +412,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 			 (outline-previous-heading))
 		       (funcall matcher
 				(nth 2 parts)
-				(and (nth 5 parts)
-				     (split-string (nth 5 parts) ":" t))
+				tags
 				(car parts))))
 		(let ((name (org-entry-get beg-block "NAME"))
 		      (depends (org-entry-get beg-block "DEPENDS" org-dotemacs-dependency-inheritance)))
