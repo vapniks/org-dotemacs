@@ -281,9 +281,9 @@ argument '--tag-match'.")
 (defun org-dotemacs-default-match nil
   "Return the default tag match string based on items in `org-dotemacs-conditional-tags' (which see)."
   (let ((str (cl-loop for (regex . condition) in org-dotemacs-conditional-tags
-                      if (not (eval condition)) concat (concat regex "\\|"))))
+                      if (not (eval condition)) concat (concat regex "$\\|^"))))
     (if (not (equal str ""))
-        (concat "-{\\(?:" (substring str 0 -2) "\\)}"))))
+        (concat "-{\\(?:^" (substring str 0 -3) "\\)}"))))
 
 ;; The following function is based on code from el-get-dependencies.el : https://github.com/dimitri/el-get/
 ;; simple-call-tree-info: DONE
