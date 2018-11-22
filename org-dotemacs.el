@@ -338,7 +338,7 @@ A list of the following four values is returned.
 			       (message "org-dotemacs: %s block evaluated" v)
 			       nil)
 		      (error (funcall (if haltonerror 'error 'message)
-				      "org-dotemacs: error in block %s: %s"
+				      "org-dotemacs: %s block has error: %s"
 				      v (error-message-string err))
 			     t)))
 		  (push v failed)
