@@ -273,6 +273,11 @@ This is passed straight to `org-entry-get'. See the documentation of that functi
   :group 'org-dotemacs
   :type '(choice (const nil) (const t) (const selective)))
 
+(defcustom org-dotemacs-noselect-on-jump nil
+  "If non-nil then don't select buffer when `org-dotemacs-jump-to-block' is called, just display it."
+  :group 'org-dotemacs
+  :type 'boolean)
+
 (defvar org-dotemacs-tag-match nil
   "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
 This overrides the match argument to `org-dotemacs-load-file' and is set by the emacs command line
@@ -505,10 +510,13 @@ The user will not be prompted for the location of any files."
 
 ;;;###autoload
 ;; simple-call-tree-info: CHECK
-(cl-defun org-dotemacs-jump-to-block (blkname &optional (file org-dotemacs-default-file))
+(cl-defun org-dotemacs-jump-to-block (blkname &optional (file org-dotemacs-default-file)
+					      (displayonly org-dotemacs-noselect-on-jump))
   "Jump to block named BLKNAME in FILE (`org-dotemacs-default-file' by default).
 If called interactively from an \"org-dotemacs:\" line in the *Messages* buffer
-the block mentioned on that line will be used for BLKNAME. Otherwise prompt for a block."
+the block mentioned on that line will be used for BLKNAME. Otherwise prompt for a block.
+If DISPLAYONLY is non-nil display the block in another window but don't visit it.
+See also `org-dotemacs-noselect-on-jump'."
   (interactive (let ((file (if current-prefix-arg
 			       (read-file-name "File: " user-emacs-directory
 					       org-dotemacs-default-file t)
@@ -531,20 +539,26 @@ the block mentioned on that line will be used for BLKNAME. Otherwise prompt for 
 							     org-dotemacs-loaded-blocks)))))
 		       file)))
   (let* ((blks (cdr (assoc (expand-file-name file) org-dotemacs-loaded-blocks)))
-	 (pos (cdr (assoc blkname blks))))
-    (find-file file)
-    (setq pos (or pos
-		  (save-excursion
-		    (and
-		     (goto-char (point-min))
-		     (re-search-forward (concat ":NAME: *" (regexp-quote blkname)) nil t)
-		     (let ((case-fold-search t))
-		       (search-forward "#+BEGIN_SRC" nil t))
-		     (point)))))
-    (if (not pos)
-	(error "Unable to find block: %s" blkname)
-      (goto-char pos)
-      (outline-show-entry))))
+	 (pos (cdr (assoc blkname blks)))
+	 (buf (find-file-noselect file)))
+    (if displayonly
+	(display-buffer buf)
+      (find-file file))
+    (with-selected-window 
+	(get-buffer-window buf)
+      (setq pos (or pos
+		    (save-excursion
+		      (and
+		       (goto-char (point-min))
+		       (re-search-forward (concat ":NAME: *" (regexp-quote blkname)) nil t)
+		       (let ((case-fold-search t))
+			 (search-forward "#+BEGIN_SRC" nil t))
+		       (point)))))
+      (if (not pos)
+	  (error "Unable to find block: %s" blkname)
+	(goto-char pos)
+	(outline-show-entry)
+	(recenter 0)))))
 
 ;; Code to handle command line arguments
 (let* ((errpos (or (cl-position-if (lambda (x) (equal x "-error-handling")) command-line-args)
