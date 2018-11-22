@@ -47,6 +47,10 @@ Use the `org-dotemacs-load-file' command for this and specify a target file when
 Note however that you may get errors when loading the elisp file that you didnt get with the org file.
 This is because in order to process the org-file some other libraries are loaded which are not loaded when the elisp file loads.
 You will have to experiment for yourself.
+
+After loading you can inspect the *Messages* buffer to see which blocks were successfully loaded and which had errors.
+If you call the `org-dotemacs-jump-to-block' command on one of the org-dotemacs lines in this buffer it will take you to
+the block mentioned on that line, or you can prompt for one by using a prefix with this command.
 * Structure of the org file 
 The elisp code should be contained in emacs-lisp code blocks, e.g:
 
