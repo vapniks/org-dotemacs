@@ -414,7 +414,8 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 				(nth 2 parts)
 				tags
 				(car parts))))
-		(let ((name (org-entry-get beg-block "NAME"))
+		(let ((name (or (org-entry-get beg-block "NAME")
+				(concat "@" (number-to-string (point)))))
 		      (depends (org-entry-get beg-block "DEPENDS" org-dotemacs-dependency-inheritance)))
 		  (push (cons name (and depends (split-string depends "[[:space:]]+"))) graph)
 		  (push (cons name (substring-no-properties body)) blocks)))))
