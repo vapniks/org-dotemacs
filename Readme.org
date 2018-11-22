@@ -125,6 +125,7 @@ blocks that have errors.
 - `org-dotemacs-exclude-todo'   : A regular expression matching TODO states to be excluded.
 - `org-dotemacs-conditional-tags' : A list of tags/regexps and corresponding conditions for loading blocks.
 - `org-dotemacs-dependency-inheritance' : Whether dependency properties (:DEPENDS:) can be inherited or not.
+- `org-dotemacs-noselect-on-jump' : Whether to display or select org-dotemacs file when `org-dotemacs-jump-to-block' is called.
 * Installation
 To use without using a package manager:
 

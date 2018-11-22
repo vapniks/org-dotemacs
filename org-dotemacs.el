@@ -187,6 +187,7 @@
 ;; `org-dotemacs-error-handling' : Indicates how errors should be handled by `org-dotemacs-load-blocks'.
 ;; `org-dotemacs-include-todo' : A regular expression matching TODO states to be included.
 ;; `org-dotemacs-exclude-todo' : A regular expression matching TODO states to be excluded.
+;; `org-dotemacs-noselect-on-jump' : Whether to display or select org-dotemacs file when `org-dotemacs-jump-to-block' is called.
 ;;
 ;; All of the above can customized by:
 ;;      M-x customize-group RET org-dotemacs RET
