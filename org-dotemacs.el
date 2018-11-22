@@ -95,14 +95,9 @@
 ;; 
 ;; You can enforce dependencies between code blocks by defining NAME & DEPENDS properties for the subtrees containing the
 ;; blocks (preferred). The NAME property should contain the name of the block, and the DEPENDS property should contain a space
-;; separated list of block names that this block depends on.
-;; These properties will be applied to all code blocks in the subtree (see "Properties and Columns" in the org manual for
-;; more details).
-;; 
-;; The NAME property can be overridden on a per block basis by adding a :name header arg to a block, and dependencies can be
-;; augmented by adding a :depends header arg (see "Header arguments" in the org manual).
-;; However it is recommended to keep a separate subtree for each code block and use properties for defining headers and names
-;; since then you can get a column view of the dependencies (see below).
+;; separated list of block names that this block depends on. If a block doesn't have it's own NAME property it will be given
+;; a default name of "@N" where N is the buffer position of the start of the block.
+;; If `org-dotemacs-dependency-inheritance' is non-nil then block dependencies will be inherited from parent headers.
 ;; 
 ;; A block will not be loaded until all of its dependencies have been loaded.
 ;; 
