@@ -501,6 +501,36 @@ The user will not be prompted for the location of any files."
        (concat (file-name-sans-extension org-dotemacs-default-file)
 	       ".el"))))
 
+;;;###autoload
+;; simple-call-tree-info: CHECK
+(cl-defun org-dotemacs-jump-to-block (blkname &optional (file org-dotemacs-default-file))
+  "Jump to block named BLKNAME in FILE (`org-dotemacs-default-file' by default).
+If called interactively from an \"org-dotemacs:\" line in the *Messages* buffer
+the block mentioned on that line will be used for BLKNAME. Otherwise prompt for a block."
+  (interactive (let ((file (if current-prefix-arg
+			       (read-file-name "File: " user-emacs-directory
+					       org-dotemacs-default-file t)
+			     org-dotemacs-default-file)))
+		 (list (if (and (eq major-mode 'messages-buffer-mode)
+				(save-excursion (forward-line 0)
+						(re-search-forward
+						 "org-dotemacs: \\(.*\\) block \\(evaluated\\|has error\\)"
+						 (line-end-position) t)))
+			   (match-string 1)
+			 (completing-read
+			  "Block name: " (mapcar 'car
+						 (cdr (assoc (expand-file-name file)
+							     org-dotemacs-loaded-blocks)))))
+		       file)))
+  (let ((pos (cdr (assoc blkname (cdr (assoc (expand-file-name file) org-dotemacs-loaded-blocks))))))
+    (find-file file)
+    (if pos (goto-char pos)
+      (unless (and
+	       (search-forward (concat ":" blkname ":") nil t)
+	       (search-forward "#+BEGIN_SRC" nil t))
+	(error "Unable to find block: %s" blkname)))
+    (outline-show-entry)))
+
 ;; Code to handle command line arguments
 (let* ((errpos (or (cl-position-if (lambda (x) (equal x "-error-handling")) command-line-args)
 		   (cl-position-if (lambda (x) (equal x "--error-handling")) command-line-args)))
