@@ -502,10 +502,16 @@ The user will not be prompted for the location of any files."
   "Jump to block named BLKNAME in FILE (`org-dotemacs-default-file' by default).
 If called interactively from an \"org-dotemacs:\" line in the *Messages* buffer
 the block mentioned on that line will be used for BLKNAME. Otherwise prompt for a block."
-  (interactive (let ((file (if current-prefix-arg
-			       (read-file-name "File: " user-emacs-directory
-					       org-dotemacs-default-file t)
-			     org-dotemacs-default-file)))
+  (interactive (let ((file (if (and (eq major-mode 'messages-buffer-mode)
+				    (save-excursion (forward-line 0)
+						    (looking-at "org-dotemacs:")
+						    (re-search-backward
+						     "org-dotemacs: parsing \\(.*\\)" nil t)))
+			       (match-string 1)
+			     (if current-prefix-arg
+				 (read-file-name "File: " user-emacs-directory
+						 org-dotemacs-default-file t)
+			       org-dotemacs-default-file))))
 		 (list (if (and (eq major-mode 'messages-buffer-mode)
 				(save-excursion (forward-line 0)
 						(re-search-forward
