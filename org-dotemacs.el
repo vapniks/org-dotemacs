@@ -276,6 +276,9 @@ This is passed straight to `org-entry-get'. See the documentation of that functi
 This overrides the match argument to `org-dotemacs-load-file' and is set by the emacs command line
 argument '--tag-match'.")
 
+(defvar org-dotemacs-loaded-blocks nil
+  "Alist of loaded files and corresponding blocks.")
+
 ;;;###autoload
 ;; simple-call-tree-info: DONE
 (defun org-dotemacs-default-match nil
@@ -419,6 +422,10 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 		      (depends (org-entry-get beg-block "DEPENDS" org-dotemacs-dependency-inheritance)))
 		  (push (cons name (and depends (split-string depends "[[:space:]]+"))) graph)
 		  (push (cons name (substring-no-properties body)) blocks)))))
+	(let ((efile (expand-file-name file)))
+	  (if (assoc efile org-dotemacs-loaded-blocks)
+	      (setcdr (assoc efile org-dotemacs-loaded-blocks) (mapcar 'car graph))
+	    (push (cons efile (mapcar 'car graph)) org-dotemacs-loaded-blocks)))
 	(cl-destructuring-bind (evaled-blocks allgood bad-blocks unevaled-blocks)
 	    (org-dotemacs-topo-sort graph blocks (not (memq error-handling '(skip retry))))
 	  (if (eq error-handling 'retry)
