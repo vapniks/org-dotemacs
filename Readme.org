@@ -47,6 +47,10 @@ Use the `org-dotemacs-load-file' command for this and specify a target file when
 Note however that you may get errors when loading the elisp file that you didnt get with the org file.
 This is because in order to process the org-file some other libraries are loaded which are not loaded when the elisp file loads.
 You will have to experiment for yourself.
+
+After loading you can inspect the *Messages* buffer to see which blocks were successfully loaded and which had errors.
+If you call the `org-dotemacs-jump-to-block' command on one of the org-dotemacs lines in this buffer it will take you to
+the block mentioned on that line, or you can prompt for one by using a prefix with this command.
 * Structure of the org file 
 The elisp code should be contained in emacs-lisp code blocks, e.g:
 
@@ -71,9 +75,9 @@ defining buffer-wide properties, etc. This way I can get a nice column view of t
 * Block dependencies 
 You can enforce dependencies between code blocks by defining NAME & DEPENDS properties for the subtrees containing the
 blocks (preferred). The NAME property should contain the name of the block, and the DEPENDS property should contain a space
-separated list of block names that this block depends on.
-These properties will be applied to all code blocks in the subtree (see "[[http://orgmode.org/org.html#Properties-and-Columns][Properties and Columns]]" in the org manual for
-more details).
+separated list of block names that this block depends on. If a block doesn't have it's own NAME property it will be given
+a default name of "@N" where N is the buffer position of the start of the block.
+If `org-dotemacs-dependency-inheritance' is non-nil then block dependencies will be inherited from parent headers.
 
 A block will not be loaded until all of its dependencies have been loaded.
 * Tags and TODO states 
@@ -82,7 +86,7 @@ and `org-dotemacs-load-default'. See "[[http://orgmode.org/org.html#Matching-tag
 
 Also, by default any blocks in a subtree marked with a todo state of BROKEN will not be evaluated.
 You can specify which TODO states to include/exclude for evaluation by customizing the `org-dotemacs-include-todo' and
-`org-dotemacs-exclude-todo' options.
+`org-dotemacs-exclude-todo' options. 
 
 To add the BROKEN state to the list of todo states for the file you need to add buffer-wide todo states by adding a line
 like this somewhere in your org file (see "[[http://orgmode.org/org.html#Per_002dfile-keywords][Per file keywords]]" in the org manual).
@@ -121,6 +125,7 @@ blocks that have errors.
 - `org-dotemacs-exclude-todo'   : A regular expression matching TODO states to be excluded.
 - `org-dotemacs-conditional-tags' : A list of tags/regexps and corresponding conditions for loading blocks.
 - `org-dotemacs-dependency-inheritance' : Whether dependency properties (:DEPENDS:) can be inherited or not.
+- `org-dotemacs-noselect-on-jump' : Whether to display or select org-dotemacs file when `org-dotemacs-jump-to-block' is called.
 * Installation
 To use without using a package manager:
 

@@ -65,7 +65,14 @@
 ;; For faster loading you may prefer to keep your config code in a separate elisp file, and just update this file now and again
 ;; by exporting the code from the org file.
 ;; Use the `org-dotemacs-load-file' command for this and specify a target elisp file when prompted.
-;; 
+;; Note however that you may get errors when loading the elisp file that you didnt get with the org file.
+;; This is because in order to process the org-file some other libraries are loaded which are not loaded when the elisp file loads.
+;; You will have to experiment for yourself.
+;;
+;; After loading you can inspect the *Messages* buffer to see which blocks were successfully loaded and which had errors.
+;; If you call the `org-dotemacs-jump-to-block' command on one of the org-dotemacs lines in this buffer it will take you to
+;; the block mentioned on that line, or you can prompt for one by using a prefix with this command.
+;;
 ;;; Structure of the org file 
 ;; 
 ;; The elisp code should be contained in emacs-lisp code blocks, e.g:
@@ -95,14 +102,9 @@
 ;; 
 ;; You can enforce dependencies between code blocks by defining NAME & DEPENDS properties for the subtrees containing the
 ;; blocks (preferred). The NAME property should contain the name of the block, and the DEPENDS property should contain a space
-;; separated list of block names that this block depends on.
-;; These properties will be applied to all code blocks in the subtree (see "Properties and Columns" in the org manual for
-;; more details).
-;; 
-;; The NAME property can be overridden on a per block basis by adding a :name header arg to a block, and dependencies can be
-;; augmented by adding a :depends header arg (see "Header arguments" in the org manual).
-;; However it is recommended to keep a separate subtree for each code block and use properties for defining headers and names
-;; since then you can get a column view of the dependencies (see below).
+;; separated list of block names that this block depends on. If a block doesn't have it's own NAME property it will be given
+;; a default name of "@N" where N is the buffer position of the start of the block.
+;; If `org-dotemacs-dependency-inheritance' is non-nil then block dependencies will be inherited from parent headers.
 ;; 
 ;; A block will not be loaded until all of its dependencies have been loaded.
 ;; 
@@ -185,6 +187,7 @@
 ;; `org-dotemacs-error-handling' : Indicates how errors should be handled by `org-dotemacs-load-blocks'.
 ;; `org-dotemacs-include-todo' : A regular expression matching TODO states to be included.
 ;; `org-dotemacs-exclude-todo' : A regular expression matching TODO states to be excluded.
+;; `org-dotemacs-noselect-on-jump' : Whether to display or select org-dotemacs file when `org-dotemacs-jump-to-block' is called.
 ;;
 ;; All of the above can customized by:
 ;;      M-x customize-group RET org-dotemacs RET
@@ -271,10 +274,18 @@ This is passed straight to `org-entry-get'. See the documentation of that functi
   :group 'org-dotemacs
   :type '(choice (const nil) (const t) (const selective)))
 
+(defcustom org-dotemacs-noselect-on-jump nil
+  "If non-nil then don't select buffer when `org-dotemacs-jump-to-block' is called, just display it."
+  :group 'org-dotemacs
+  :type 'boolean)
+
 (defvar org-dotemacs-tag-match nil
   "An org tag match string indicating which code blocks to load with `org-dotemacs-load-file'.
 This overrides the match argument to `org-dotemacs-load-file' and is set by the emacs command line
 argument '--tag-match'.")
+
+(defvar org-dotemacs-loaded-blocks nil
+  "Alist of loaded files, blocks and positions.")
 
 ;;;###autoload
 ;; simple-call-tree-info: DONE
@@ -338,7 +349,7 @@ A list of the following four values is returned.
 			       (message "org-dotemacs: %s block evaluated" v)
 			       nil)
 		      (error (funcall (if haltonerror 'error 'message)
-				      "org-dotemacs: error in block %s: %s"
+				      "org-dotemacs: %s block has error: %s"
 				      v (error-message-string err))
 			     t)))
 		  (push v failed)
@@ -387,7 +398,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 			(cdr (org-make-tags-matcher matchstr))
 		      (lambda (&rest args) t)))
 	   (todo-only nil)
-	   blocks graph
+	   blocks positions graph
 	   ;; make sure we dont get any strange behaviour from hooks
 	   find-file-hook change-major-mode-after-body-hook
 	   text-mode-hook outline-mode-hook org-mode-hook)
@@ -414,10 +425,19 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 				(nth 2 parts)
 				tags
 				(car parts))))
-		(let ((name (org-entry-get beg-block "NAME"))
+		(let ((name (or (org-entry-get beg-block "NAME")
+				(concat "@" (number-to-string (point)))))
 		      (depends (org-entry-get beg-block "DEPENDS" org-dotemacs-dependency-inheritance)))
 		  (push (cons name (and depends (split-string depends "[[:space:]]+"))) graph)
+		  (push (point) positions)
 		  (push (cons name (substring-no-properties body)) blocks)))))
+	(let ((efile (expand-file-name file))
+	      (blkalist (cl-loop for blk in (mapcar 'car graph)
+				 for pos in positions
+				 collect (cons blk pos))))
+	  (if (assoc efile org-dotemacs-loaded-blocks)
+	      (setcdr (assoc efile org-dotemacs-loaded-blocks) blkalist)
+	    (push (cons efile blkalist) org-dotemacs-loaded-blocks)))
 	(cl-destructuring-bind (evaled-blocks allgood bad-blocks unevaled-blocks)
 	    (org-dotemacs-topo-sort graph blocks (not (memq error-handling '(skip retry))))
 	  (if (eq error-handling 'retry)
@@ -488,6 +508,58 @@ The user will not be prompted for the location of any files."
    (if savep
        (concat (file-name-sans-extension org-dotemacs-default-file)
 	       ".el"))))
+
+;;;###autoload
+;; simple-call-tree-info: CHECK
+(cl-defun org-dotemacs-jump-to-block (blkname &optional (file org-dotemacs-default-file)
+					      (displayonly org-dotemacs-noselect-on-jump))
+  "Jump to block named BLKNAME in FILE (`org-dotemacs-default-file' by default).
+If called interactively from an \"org-dotemacs:\" line in the *Messages* buffer
+the block mentioned on that line will be used for BLKNAME. Otherwise prompt for a block.
+If DISPLAYONLY is non-nil display the block in another window but don't visit it.
+See also `org-dotemacs-noselect-on-jump'."
+  (interactive (let ((file (if current-prefix-arg
+			       (read-file-name "File: " user-emacs-directory
+					       org-dotemacs-default-file t)
+			     (if (and (eq major-mode 'messages-buffer-mode)
+				      (save-excursion 
+					(re-search-backward
+					 "org-dotemacs: parsing \\(.*\\)" nil t)))
+				 (match-string 1)
+			       org-dotemacs-default-file))))
+		 (list (if (and (eq major-mode 'messages-buffer-mode)
+				(not current-prefix-arg)
+				(save-excursion (forward-line 0)
+						(re-search-forward
+						 "org-dotemacs: \\(.*\\) block \\(evaluated\\|has error\\)"
+						 (line-end-position) t)))
+			   (match-string 1)
+			 (completing-read
+			  "Block name: " (mapcar 'car
+						 (cdr (assoc (expand-file-name file)
+							     org-dotemacs-loaded-blocks)))))
+		       file)))
+  (let* ((blks (cdr (assoc (expand-file-name file) org-dotemacs-loaded-blocks)))
+	 (pos (cdr (assoc blkname blks)))
+	 (buf (find-file-noselect file)))
+    (if displayonly
+	(display-buffer buf)
+      (find-file file))
+    (with-selected-window 
+	(get-buffer-window buf)
+      (setq pos (or pos
+		    (save-excursion
+		      (and
+		       (goto-char (point-min))
+		       (re-search-forward (concat ":NAME: *" (regexp-quote blkname)) nil t)
+		       (let ((case-fold-search t))
+			 (search-forward "#+BEGIN_SRC" nil t))
+		       (point)))))
+      (if (not pos)
+	  (error "Unable to find block: %s" blkname)
+	(goto-char pos)
+	(outline-show-entry)
+	(recenter 0)))))
 
 ;; Code to handle command line arguments
 (let* ((errpos (or (cl-position-if (lambda (x) (equal x "-error-handling")) command-line-args)
