@@ -362,7 +362,7 @@ A list of the following four values is returned.
 
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(cl-defun org-dotemacs-load-file (&optional match
+(cl-defun org-dotemacs-load-file (&optional (match org-dotemacs-tag-match)
 					    (file org-dotemacs-default-file)
 					    target-file
 					    (error-handling org-dotemacs-error-handling))
@@ -496,7 +496,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(cl-defun org-dotemacs-load-default (&optional match savep)
+(cl-defun org-dotemacs-load-default (&optional (match org-dotemacs-tag-match) savep)
   "Load code from `org-dotemacs-default-file' matching tag MATCH.
 If SAVEP is non-nil then `org-dotemacs-load-file' will be called with TARGET-FILE
 argument set to the value of `org-dotemacs-default-file' with the file ending 
