@@ -568,9 +568,15 @@ See also `org-dotemacs-noselect-on-jump'."
        (tagpos (or (cl-position-if (lambda (x) (equal x "-tag-match")) command-line-args)
 		   (cl-position-if (lambda (x) (equal x "--tag-match")) command-line-args)))
        (tagval (if tagpos (nth (+ 1 tagpos) command-line-args))))
-  (if errval 
-      (setq org-dotemacs-error-handling (intern errval)))
-  (if tagval (setq org-dotemacs-tag-match tagval)))
+  (when errval
+    (setq org-dotemacs-error-handling (intern errval))
+    ;; now that they’ve been processed, remove the option
+    ;; and value from command-line-args (as Emacs expects)
+    (setcdr (nthcdr (1- errpos) command-line-args) (nthcdr (+ 2 errpos) command-line-args)))
+  (when tagval
+    (setq org-dotemacs-tag-match tagval)
+    ;; same here
+    (setcdr (nthcdr (1- tagpos) command-line-args) (nthcdr (+ 2 tagpos) command-line-args))))
 
 (message "org-dotemacs: error-handling = %s" (concat "'" (symbol-name org-dotemacs-error-handling)))
 (message "org-dotemacs: tag-match = %s" org-dotemacs-tag-match)
