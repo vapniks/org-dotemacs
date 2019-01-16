@@ -362,7 +362,7 @@ A list of the following four values is returned.
 
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(cl-defun org-dotemacs-load-file (&optional match
+(cl-defun org-dotemacs-load-file (&optional (match org-dotemacs-tag-match)
 					    (file org-dotemacs-default-file)
 					    target-file
 					    (error-handling org-dotemacs-error-handling))
@@ -496,7 +496,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 
 ;;;###autoload
 ;; simple-call-tree-info: CHANGE  
-(cl-defun org-dotemacs-load-default (&optional match savep)
+(cl-defun org-dotemacs-load-default (&optional (match org-dotemacs-tag-match) savep)
   "Load code from `org-dotemacs-default-file' matching tag MATCH.
 If SAVEP is non-nil then `org-dotemacs-load-file' will be called with TARGET-FILE
 argument set to the value of `org-dotemacs-default-file' with the file ending 
@@ -568,9 +568,15 @@ See also `org-dotemacs-noselect-on-jump'."
        (tagpos (or (cl-position-if (lambda (x) (equal x "-tag-match")) command-line-args)
 		   (cl-position-if (lambda (x) (equal x "--tag-match")) command-line-args)))
        (tagval (if tagpos (nth (+ 1 tagpos) command-line-args))))
-  (if errval 
-      (setq org-dotemacs-error-handling (intern errval)))
-  (if tagval (setq org-dotemacs-tag-match tagval)))
+  (when errval
+    (setq org-dotemacs-error-handling (intern errval))
+    ;; now that they’ve been processed, remove the option
+    ;; and value from command-line-args (as Emacs expects)
+    (setcdr (nthcdr (1- errpos) command-line-args) (nthcdr (+ 2 errpos) command-line-args)))
+  (when tagval
+    (setq org-dotemacs-tag-match tagval)
+    ;; same here
+    (setcdr (nthcdr (1- tagpos) command-line-args) (nthcdr (+ 2 tagpos) command-line-args))))
 
 (message "org-dotemacs: error-handling = %s" (concat "'" (symbol-name org-dotemacs-error-handling)))
 (message "org-dotemacs: tag-match = %s" org-dotemacs-tag-match)
