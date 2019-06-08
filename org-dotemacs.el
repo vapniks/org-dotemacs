@@ -430,7 +430,7 @@ The optional argument ERROR-HANDLING determines how errors are handled and takes
 		      (depends (org-entry-get beg-block "DEPENDS" org-dotemacs-dependency-inheritance)))
 		  (push (cons name (and depends (split-string depends "[[:space:]]+"))) graph)
 		  (push (point) positions)
-		  (push (cons name (substring-no-properties body)) blocks)))))
+		  (push (cons name (substring-no-properties (or body ""))) blocks)))))
 	(let ((efile (expand-file-name file))
 	      (blkalist (cl-loop for blk in (mapcar 'car graph)
 				 for pos in positions
