@@ -213,6 +213,7 @@
 
 ;;; Require
 (require 'cl-lib)
+(require 'org-element)
 (require 'org)
 
 ;;; Code:
