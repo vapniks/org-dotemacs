@@ -159,3 +159,5 @@ To load a different org file either customize `org-dotemacs-default-file' or use
  (org-dotemacs-load-file "~/.emacs.d/my_emacs_config.org" "<TAG-MATCH>")
 #+END_SRC
 
+* See also
+[guard.el](https://github.com/Dspil/guard.el) does a similar thing for your init file but without the niceties of org-mode.
