@@ -160,4 +160,6 @@ To load a different org file either customize `org-dotemacs-default-file' or use
 #+END_SRC
 
 * See also
-[[https://github.com/Dspil/guard.el][guard.el]] does a similar thing for your init file but without the niceties of org-mode.
+[[https://github.com/Dspil/guard.el][guard]] does a similar thing for your init file but without the niceties of org-mode.
+[[https://github.com/jwiegley/use-package][use-package]] works well conjunction with org-readme, and can set keybindings, evaluate code, add hooks, etc. when an individual package is loaded.
+[[https://www.emacswiki.org/emacs/SetupEl][setup]] is a more flexible alternative to [[https://github.com/jwiegley/use-package][use-package]] that should also work well in conjunction with org-readme, but I haven't tried it.
