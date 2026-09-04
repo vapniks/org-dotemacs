@@ -18,7 +18,7 @@ org-dotemacs.el --- Store your emacs config as an org file, and choose which bit
 
 This file is NOT part of GNU Emacs
 
-Licensed under the [GPL version 3](http://www.gnu.org/licenses/) or later.
+Licensed under the [[http://www.gnu.org/licenses/][GPL version 3]] or later.
 
 Bitcoin donations gratefully accepted: 1Ph9srQBspJCDS9CnGUyWJPTrU4ydX9Aa3
 
@@ -160,4 +160,4 @@ To load a different org file either customize `org-dotemacs-default-file' or use
 #+END_SRC
 
 * See also
-[guard.el](https://github.com/Dspil/guard.el) does a similar thing for your init file but without the niceties of org-mode.
+[[https://github.com/Dspil/guard.el][guard.el]] does a similar thing for your init file but without the niceties of org-mode.
